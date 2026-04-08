@@ -4,1178 +4,926 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="FIBRACOR">
-<title>FIBRACOR — Sistema de gestión</title>
+<title>FIBRACOR — Gestión de Obras</title>
 <style>
-/* ── Reset y base ─────────────────────────────────────── */
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
 :root{
-  --navy:#1B3D6E; --navy-dark:#0C2850; --navy-light:#E6EFF8;
-  --green:#2E7D32; --green-light:#E8F5E9;
-  --amber:#F57F17; --amber-light:#FFF8E1;
-  --red:#C62828;   --red-light:#FFEBEE;
+  --navy:#1B3D6E;--navy-dark:#0C2547;--navy-light:#E8F0FA;
+  --green:#2E7D32;--green-light:#E8F5E9;
+  --amber:#E65100;--amber-light:#FFF3E0;
+  --red:#C62828;--red-light:#FFEBEE;
   --purple:#4527A0;--purple-light:#EDE7F6;
-  --teal:#00695C;  --teal-light:#E0F2F1;
-  --gray:#455A64;  --gray-light:#ECEFF1;
-  --bg:#F5F7FA; --card:#FFFFFF;
-  --text:#1A1A2E; --text2:#546E7A; --text3:#90A4AE;
-  --border:#E0E7EF; --shadow:0 2px 8px rgba(0,0,0,.08);
-  --radius:12px; --radius-sm:8px;
-  --font:'Segoe UI',system-ui,-apple-system,sans-serif;
+  --teal:#00695C;--teal-light:#E0F2F1;
+  --gray:#455A64;--gray-light:#ECEFF1;
+  --bg:#F5F7FA;--surface:#FFFFFF;
+  --border:#E0E0E0;--text:#212121;--text2:#757575;
+  --radius:12px;--radius-sm:8px;
+  --shadow:0 2px 8px rgba(0,0,0,.08);
+  --shadow-md:0 4px 16px rgba(0,0,0,.12);
 }
-body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden;}
-
-/* ── Utilidades ──────────────────────────────────────── */
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;font-size:14px;}
 .hidden{display:none!important;}
-.flex{display:flex;} .col{flex-direction:column;} .gap4{gap:4px;} .gap8{gap:8px;} .gap12{gap:12px;} .gap16{gap:16px;}
-.items-center{align-items:center;} .justify-between{justify-content:space-between;} .justify-center{justify-content:center;}
-.flex1{flex:1;} .w100{width:100%;} .text-center{text-align:center;}
-.bold{font-weight:600;} .semi{font-weight:500;}
-.small{font-size:12px;} .xsmall{font-size:11px;} .large{font-size:18px;}
-.text2{color:var(--text2);} .text3{color:var(--text3);}
-.mt4{margin-top:4px;} .mt8{margin-top:8px;} .mt12{margin-top:12px;} .mt16{margin-top:16px;}
-.mb8{margin-bottom:8px;} .mb12{margin-bottom:12px;} .mb16{margin-bottom:16px;}
-.p12{padding:12px;} .p16{padding:16px;}
-.radius{border-radius:var(--radius);} .radius-sm{border-radius:var(--radius-sm);}
-.card{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);padding:16px;}
-.divider{height:1px;background:var(--border);margin:12px 0;}
-
-/* ── Badges ──────────────────────────────────────────── */
+.flex{display:flex;}.gap4{gap:4px;}.gap8{gap:8px;}.gap12{gap:12px;}
+.col{flex-direction:column;}.center{align-items:center;justify-content:center;}
+.between{justify-content:space-between;align-items:center;}.wrap{flex-wrap:wrap;}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;}
+.w100{width:100%;}.mt8{margin-top:8px;}.mt12{margin-top:12px;}.mt16{margin-top:16px;}
+.mb8{margin-bottom:8px;}.mb12{margin-bottom:12px;}
+.bold{font-weight:600;}.small{font-size:12px;}.muted{color:var(--text2);}
 .badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:500;white-space:nowrap;}
 .badge-blue{background:var(--navy-light);color:var(--navy);}
 .badge-green{background:var(--green-light);color:var(--green);}
 .badge-amber{background:var(--amber-light);color:var(--amber);}
 .badge-red{background:var(--red-light);color:var(--red);}
+.badge-gray{background:var(--gray-light);color:var(--gray);}
 .badge-purple{background:var(--purple-light);color:var(--purple);}
 .badge-teal{background:var(--teal-light);color:var(--teal);}
-.badge-gray{background:var(--gray-light);color:var(--gray);}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:10px 18px;border-radius:var(--radius-sm);font-size:13px;font-weight:500;cursor:pointer;border:none;transition:all .15s;font-family:inherit;}
+.btn-primary{background:var(--navy);color:#fff;}.btn-primary:hover{background:var(--navy-dark);}
+.btn-success{background:var(--green);color:#fff;}.btn-success:hover{background:#1B5E20;}
+.btn-outline{background:transparent;color:var(--navy);border:1.5px solid var(--navy);}
+.btn-ghost{background:transparent;color:var(--text2);border:1px solid var(--border);}
+.btn-ghost:hover{background:var(--gray-light);}
+.btn-sm{padding:6px 12px;font-size:12px;}.btn-block{width:100%;}
+.btn:disabled{opacity:.5;cursor:not-allowed;}
+.form-group{display:flex;flex-direction:column;gap:4px;margin-bottom:12px;}
+.form-group label{font-size:12px;font-weight:500;color:var(--text2);}
+.input,.select,.textarea{width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:14px;font-family:inherit;background:var(--surface);color:var(--text);transition:border .15s;}
+.input:focus,.select:focus,.textarea:focus{outline:none;border-color:var(--navy);}
+.textarea{resize:vertical;min-height:80px;}
+.card{background:var(--surface);border-radius:var(--radius);padding:16px;box-shadow:var(--shadow);margin-bottom:12px;}
+.card-title{font-size:14px;font-weight:600;margin-bottom:12px;}
+.metric-card{background:var(--surface);border-radius:var(--radius);padding:14px;box-shadow:var(--shadow);text-align:center;}
+.metric-value{font-size:28px;font-weight:700;margin:4px 0;}
+.metric-label{font-size:11px;color:var(--text2);}
+.metric-sub{font-size:11px;margin-top:2px;}
+.table-wrap{overflow-x:auto;}
+table{width:100%;border-collapse:collapse;font-size:12px;min-width:400px;}
+th{text-align:left;padding:8px 10px;font-size:11px;font-weight:600;color:var(--text2);border-bottom:2px solid var(--border);white-space:nowrap;}
+td{padding:9px 10px;border-bottom:1px solid var(--border);vertical-align:middle;}
+tr:last-child td{border-bottom:none;}
+tr:hover td{background:#FAFAFA;}
+.alert{padding:10px 14px;border-radius:var(--radius-sm);font-size:13px;margin-bottom:10px;border-left:4px solid;line-height:1.5;}
+.alert-info{background:var(--navy-light);border-color:var(--navy);color:var(--navy);}
+.alert-success{background:var(--green-light);border-color:var(--green);color:var(--green);}
+.alert-warning{background:var(--amber-light);border-color:var(--amber);color:var(--amber);}
+.alert-danger{background:var(--red-light);border-color:var(--red);color:var(--red);}
+.progress{height:6px;background:var(--border);border-radius:3px;overflow:hidden;}
+.progress-bar{height:100%;border-radius:3px;transition:width .3s;}
 
-/* ── Botones ─────────────────────────────────────────── */
-.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:10px 16px;border-radius:var(--radius-sm);font-size:13px;font-weight:500;cursor:pointer;border:none;transition:all .15s;font-family:var(--font);}
-.btn:active{transform:scale(.97);}
-.btn-primary{background:var(--navy);color:#fff;}
-.btn-primary:hover{background:var(--navy-dark);}
-.btn-success{background:var(--green);color:#fff;}
-.btn-success:hover{background:#1B5E20;}
-.btn-danger{background:var(--red);color:#fff;}
-.btn-outline{background:transparent;border:1.5px solid var(--border);color:var(--text);}
-.btn-outline:hover{background:var(--gray-light);}
-.btn-sm{padding:6px 12px;font-size:12px;}
-.btn-block{width:100%;}
-.btn-icon{width:36px;height:36px;padding:0;border-radius:50%;}
-
-/* ── Inputs ──────────────────────────────────────────── */
-.input{width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:14px;font-family:var(--font);color:var(--text);background:#fff;transition:border .15s;outline:none;}
-.input:focus{border-color:var(--navy);}
-.select{width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:14px;font-family:var(--font);color:var(--text);background:#fff;outline:none;cursor:pointer;}
-.label{font-size:12px;font-weight:500;color:var(--text2);margin-bottom:4px;display:block;}
-.form-group{margin-bottom:12px;}
-.form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
-
-/* ── Login screen ────────────────────────────────────── */
-#screen-login{min-height:100vh;background:linear-gradient(135deg,var(--navy) 0%,#2D5A9E 100%);display:flex;align-items:center;justify-content:center;padding:20px;}
-.login-card{background:#fff;border-radius:20px;padding:32px 28px;width:100%;max-width:380px;box-shadow:0 20px 60px rgba(0,0,0,.2);}
+/* LOGIN */
+#screen-login{min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,var(--navy) 0%,#2563EB 100%);padding:20px;}
+.login-box{background:var(--surface);border-radius:20px;padding:36px 32px;width:100%;max-width:380px;box-shadow:var(--shadow-md);}
 .login-logo{text-align:center;margin-bottom:28px;}
-.login-logo .logo-icon{width:64px;height:64px;background:var(--navy);border-radius:16px;display:flex;align-items:center;justify-content:center;margin:0 auto 12px;font-size:28px;}
+.login-logo-icon{width:64px;height:64px;background:var(--navy);border-radius:16px;display:flex;align-items:center;justify-content:center;margin:0 auto 12px;font-size:28px;}
 .login-logo h1{font-size:22px;font-weight:700;color:var(--navy);}
 .login-logo p{font-size:13px;color:var(--text2);margin-top:2px;}
-.login-error{background:var(--red-light);color:var(--red);padding:10px 14px;border-radius:var(--radius-sm);font-size:13px;margin-bottom:12px;}
+.login-error{background:var(--red-light);color:var(--red);padding:10px 14px;border-radius:var(--radius-sm);font-size:13px;margin-bottom:12px;text-align:center;}
 
-/* ── App shell ───────────────────────────────────────── */
-#app{display:flex;height:100vh;overflow:hidden;}
+/* APP */
+#screen-app{display:none;min-height:100vh;flex-direction:column;}
+.topbar{background:var(--navy);color:#fff;padding:0 16px;height:52px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;box-shadow:0 2px 8px rgba(0,0,0,.2);}
+.topbar-brand{font-size:16px;font-weight:700;}
+.topbar-right{display:flex;align-items:center;gap:10px;}
+.topbar-user{font-size:12px;opacity:.85;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.topbar-badge{background:rgba(255,255,255,.2);padding:2px 8px;border-radius:10px;font-size:10px;}
+.btn-logout{background:rgba(255,255,255,.15);border:none;color:#fff;padding:6px 12px;border-radius:6px;font-size:12px;cursor:pointer;}
+.btn-logout:hover{background:rgba(255,255,255,.25);}
 
-/* ── Sidebar ─────────────────────────────────────────── */
-#sidebar{width:240px;background:var(--navy);display:flex;flex-direction:column;flex-shrink:0;transition:transform .25s;}
-.sidebar-logo{padding:20px 16px 16px;border-bottom:1px solid rgba(255,255,255,.1);}
-.sidebar-logo .app-name{font-size:18px;font-weight:700;color:#fff;}
-.sidebar-logo .app-sub{font-size:11px;color:rgba(255,255,255,.5);margin-top:2px;}
-.user-info{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid rgba(255,255,255,.1);}
-.user-avatar{width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600;color:#fff;flex-shrink:0;}
-.user-name{font-size:13px;font-weight:500;color:#fff;}
-.user-area{font-size:11px;color:rgba(255,255,255,.5);}
-.nav-section{font-size:10px;font-weight:600;color:rgba(255,255,255,.35);padding:16px 16px 6px;letter-spacing:.8px;text-transform:uppercase;}
-.nav-item{display:flex;align-items:center;gap:10px;padding:10px 16px;font-size:13px;color:rgba(255,255,255,.7);cursor:pointer;border-left:3px solid transparent;transition:all .15s;}
-.nav-item:hover{background:rgba(255,255,255,.08);color:#fff;}
-.nav-item.active{background:rgba(255,255,255,.12);color:#fff;border-left-color:#fff;}
-.nav-item .nav-icon{font-size:16px;width:20px;text-align:center;}
-.sidebar-footer{margin-top:auto;padding:16px;border-top:1px solid rgba(255,255,255,.1);}
-.btn-logout{background:rgba(255,255,255,.1);color:#fff;border:none;width:100%;padding:9px;border-radius:var(--radius-sm);font-size:13px;cursor:pointer;font-family:var(--font);}
-.btn-logout:hover{background:rgba(255,255,255,.18);}
+/* NAV */
+.nav-bottom{background:var(--surface);border-top:1px solid var(--border);display:flex;position:fixed;bottom:0;left:0;right:0;z-index:99;box-shadow:0 -2px 8px rgba(0,0,0,.06);}
+.nav-tab{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:6px 4px;cursor:pointer;color:var(--text2);font-size:10px;gap:2px;min-height:52px;transition:color .15s;border:none;background:none;}
+.nav-tab.active{color:var(--navy);}
+.nav-tab-icon{font-size:22px;line-height:1;}
+.nav-tab-label{font-size:9px;font-weight:500;}
 
-/* ── Main content ────────────────────────────────────── */
-#main{flex:1;display:flex;flex-direction:column;overflow:hidden;}
-.topbar{background:#fff;border-bottom:1px solid var(--border);padding:0 20px;height:56px;display:flex;align-items:center;gap:12px;flex-shrink:0;}
-.topbar-title{font-size:16px;font-weight:600;color:var(--text);flex:1;}
-.content{flex:1;overflow-y:auto;padding:20px;}
+.app-content{padding:14px 14px 70px;max-width:900px;margin:0 auto;width:100%;}
+.module{display:none;}.module.active{display:block;}
 
-/* ── Hamburger (mobile) ──────────────────────────────── */
-.hamburger{display:none;flex-direction:column;gap:4px;cursor:pointer;padding:8px;}
-.hamburger span{width:20px;height:2px;background:var(--text);border-radius:2px;}
-.sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:99;}
-
-/* ── Métricas dashboard ──────────────────────────────── */
-.metrics-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:16px;}
-.metric-card{background:#fff;border-radius:var(--radius);padding:16px;box-shadow:var(--shadow);}
-.metric-val{font-size:28px;font-weight:700;margin:4px 0;}
-.metric-label{font-size:12px;color:var(--text2);}
-.metric-sub{font-size:11px;color:var(--text3);margin-top:2px;}
-
-/* ── Tabla ───────────────────────────────────────────── */
-.table-wrap{overflow-x:auto;border-radius:var(--radius);box-shadow:var(--shadow);}
-table{width:100%;border-collapse:collapse;background:#fff;font-size:13px;}
-th{text-align:left;padding:10px 14px;color:var(--text2);font-weight:500;border-bottom:2px solid var(--border);font-size:12px;white-space:nowrap;background:#FAFBFC;}
-td{padding:10px 14px;border-bottom:1px solid var(--border);vertical-align:middle;}
-tr:last-child td{border-bottom:none;}
-tr:hover td{background:#F8FAFD;}
-
-/* ── Progress bar ────────────────────────────────────── */
-.progress{height:6px;background:var(--border);border-radius:3px;overflow:hidden;}
-.progress-fill{height:100%;border-radius:3px;transition:width .4s;}
-
-/* ── Alerta ──────────────────────────────────────────── */
-.alert{padding:12px 14px;border-radius:var(--radius-sm);font-size:13px;margin-bottom:10px;border-left:4px solid;}
-.alert-red{background:var(--red-light);border-color:var(--red);color:var(--red);}
-.alert-amber{background:var(--amber-light);border-color:var(--amber);color:var(--amber);}
-.alert-green{background:var(--green-light);border-color:var(--green);color:var(--green);}
-.alert-blue{background:var(--navy-light);border-color:var(--navy);color:var(--navy);}
-
-/* ── Modal ───────────────────────────────────────────── */
-.modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:200;display:flex;align-items:flex-end;justify-content:center;}
-.modal{background:#fff;border-radius:20px 20px 0 0;padding:24px 20px;width:100%;max-width:520px;max-height:85vh;overflow-y:auto;}
-.modal-title{font-size:16px;font-weight:600;margin-bottom:16px;}
-
-/* ── Toast ───────────────────────────────────────────── */
-#toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#1A1A2E;color:#fff;padding:12px 20px;border-radius:20px;font-size:13px;z-index:999;transition:opacity .3s;pointer-events:none;white-space:nowrap;}
-
-/* ── Loading ─────────────────────────────────────────── */
-.spinner{width:32px;height:32px;border:3px solid var(--border);border-top-color:var(--navy);border-radius:50%;animation:spin .8s linear infinite;margin:40px auto;}
+.loader{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:48px;color:var(--text2);}
+.spinner{width:32px;height:32px;border:3px solid var(--border);border-top-color:var(--navy);border-radius:50%;animation:spin .8s linear infinite;margin-bottom:12px;}
 @keyframes spin{to{transform:rotate(360deg);}}
 
-/* ── Inventario cards (mobile friendly) ──────────────── */
-.inv-card{background:#fff;border-radius:var(--radius);padding:14px;box-shadow:var(--shadow);margin-bottom:10px;}
-.inv-card-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;}
-.inv-item-name{font-size:14px;font-weight:600;}
-.inv-item-code{font-size:11px;color:var(--text3);}
-.stock-bars{display:flex;gap:3px;height:8px;border-radius:4px;overflow:hidden;margin:6px 0;}
-.stock-seg{height:100%;border-radius:2px;}
-.stock-legend{display:flex;gap:12px;font-size:11px;color:var(--text2);}
-.stock-dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:3px;}
+#toast{position:fixed;bottom:62px;left:50%;transform:translateX(-50%);background:#323232;color:#fff;padding:10px 20px;border-radius:20px;font-size:13px;z-index:999;opacity:0;transition:opacity .3s;pointer-events:none;white-space:nowrap;max-width:90vw;}
+#toast.show{opacity:1;}
 
-/* ── Obras ───────────────────────────────────────────── */
-.obra-card{background:#fff;border-radius:var(--radius);padding:14px;box-shadow:var(--shadow);margin-bottom:10px;cursor:pointer;transition:box-shadow .15s;}
-.obra-card:hover{box-shadow:0 4px 16px rgba(0,0,0,.12);}
-.obra-etapa{display:flex;align-items:center;gap:6px;margin-top:8px;}
-.etapa-dot{width:8px;height:8px;border-radius:50%;}
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:200;display:flex;align-items:flex-end;justify-content:center;}
+.modal-bg.hidden{display:none;}
+.modal{background:var(--surface);border-radius:20px 20px 0 0;padding:20px;width:100%;max-width:520px;max-height:88vh;overflow-y:auto;}
+.modal-title{font-size:16px;font-weight:600;margin-bottom:14px;}
+.modal-close{float:right;cursor:pointer;font-size:22px;color:var(--text2);line-height:1;margin-top:-2px;}
 
-/* ── Mobile responsive ───────────────────────────────── */
-@media(max-width:768px){
-  #sidebar{position:fixed;top:0;left:0;height:100vh;z-index:100;transform:translateX(-100%);}
-  #sidebar.open{transform:translateX(0);}
-  .sidebar-overlay.open{display:block;}
-  .hamburger{display:flex;}
-  #main{width:100%;}
-  .content{padding:14px;}
-  .form-row{grid-template-columns:1fr;}
-  .metrics-grid{grid-template-columns:1fr 1fr;}
-  .topbar{padding:0 14px;}
+.filter-chips{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;margin-bottom:12px;scrollbar-width:none;}
+.filter-chips::-webkit-scrollbar{display:none;}
+.chip{padding:6px 14px;border-radius:20px;font-size:12px;font-weight:500;cursor:pointer;white-space:nowrap;border:1.5px solid var(--border);background:var(--surface);color:var(--text2);}
+.chip.active{background:var(--navy);color:#fff;border-color:var(--navy);}
+
+.list-item{background:var(--surface);border-radius:var(--radius);padding:14px;margin-bottom:8px;box-shadow:var(--shadow);cursor:pointer;border-left:4px solid transparent;transition:border-color .15s;}
+.list-item:hover{border-left-color:var(--navy);}
+.list-item-title{font-size:14px;font-weight:600;margin-bottom:4px;}
+
+.inv-item{background:var(--surface);border-radius:var(--radius);padding:14px;margin-bottom:8px;box-shadow:var(--shadow);}
+.inv-item.critico{border-left:4px solid var(--red);}
+.inv-item.ok{border-left:4px solid var(--green);}
+
+@media(min-width:768px){
+  .nav-bottom{position:static;border-top:none;border-bottom:1px solid rgba(255,255,255,.2);background:var(--navy);justify-content:center;gap:0;}
+  .nav-tab{color:rgba(255,255,255,.6);flex-direction:row;gap:6px;padding:0 16px;min-height:44px;flex:none;border-bottom:3px solid transparent;}
+  .nav-tab.active{color:#fff;border-bottom-color:#fff;}
+  .nav-tab-label{font-size:13px;}
+  .nav-tab-icon{font-size:16px;}
+  .app-content{padding:20px 20px 40px;}
+  #toast{bottom:20px;}
+  .modal-bg{align-items:center;}
+  .modal{border-radius:20px;margin:16px;}
+  #screen-app{display:none;}
+  #screen-app.visible{display:flex;}
 }
 </style>
 </head>
 <body>
 
-<!-- ══════════════════════════════════════════════════════
-     LOGIN
-══════════════════════════════════════════════════════ -->
+<!-- LOGIN -->
 <div id="screen-login">
-  <div class="login-card">
+  <div class="login-box">
     <div class="login-logo">
-      <div class="logo-icon">🔌</div>
+      <div class="login-logo-icon">🌐</div>
       <h1>FIBRACOR</h1>
-      <p>Sistema de gestión operativa</p>
+      <p>Sistema de gestión de obras</p>
     </div>
     <div id="login-error" class="login-error hidden"></div>
     <div class="form-group">
-      <label class="label">Email</label>
+      <label>Email</label>
       <input class="input" type="email" id="login-email" placeholder="tu@email.com" autocomplete="email">
     </div>
     <div class="form-group">
-      <label class="label">Contraseña</label>
+      <label>Contraseña</label>
       <input class="input" type="password" id="login-pass" placeholder="••••••••" autocomplete="current-password">
     </div>
-    <button class="btn btn-primary btn-block mt8" onclick="doLogin()" id="btn-login">
-      Ingresar
-    </button>
-    <p class="text-center small text2 mt12">FIBRACOR · Procedimiento Operativo v2.0</p>
+    <button class="btn btn-primary btn-block mt8" id="btn-login" onclick="doLogin()">Ingresar</button>
+    <p style="text-align:center;font-size:11px;color:var(--text2);margin-top:16px;">FIBRACOR · v2.0</p>
   </div>
 </div>
 
-<!-- ══════════════════════════════════════════════════════
-     APP
-══════════════════════════════════════════════════════ -->
-<div id="app" class="hidden">
-
-  <!-- Sidebar overlay (mobile) -->
-  <div class="sidebar-overlay" id="sidebar-overlay" onclick="closeSidebar()"></div>
-
-  <!-- Sidebar -->
-  <div id="sidebar">
-    <div class="sidebar-logo">
-      <div class="app-name">🔌 FIBRACOR</div>
-      <div class="app-sub">Gestión operativa</div>
+<!-- APP -->
+<div id="screen-app">
+  <div class="topbar">
+    <div class="topbar-brand">FIBRACOR</div>
+    <div class="topbar-right">
+      <span class="topbar-user" id="topbar-user"></span>
+      <span class="topbar-badge" id="topbar-area"></span>
+      <button class="btn-logout" onclick="doLogout()">Salir</button>
     </div>
-    <div class="user-info">
-      <div class="user-avatar" id="user-avatar">?</div>
-      <div>
-        <div class="user-name" id="user-name">—</div>
-        <div class="user-area" id="user-area">—</div>
+  </div>
+
+  <nav class="nav-bottom" id="main-nav"></nav>
+
+  <div class="app-content">
+
+    <!-- DASHBOARD -->
+    <div class="module active" id="mod-dashboard">
+      <div id="dash-content"><div class="loader"><div class="spinner"></div>Cargando...</div></div>
+    </div>
+
+    <!-- OBRAS -->
+    <div class="module" id="mod-obras">
+      <div class="flex between mb12">
+        <h2 style="font-size:16px;font-weight:700;">Obras</h2>
+        <button class="btn btn-primary btn-sm" id="btn-nueva-obra" onclick="abrirModalObra()">+ Nueva OIO</button>
       </div>
-    </div>
-    <nav id="nav-menu"></nav>
-    <div class="sidebar-footer">
-      <button class="btn-logout" onclick="logout()">Cerrar sesión</button>
-    </div>
-  </div>
-
-  <!-- Main -->
-  <div id="main">
-    <div class="topbar">
-      <div class="hamburger" onclick="toggleSidebar()">
-        <span></span><span></span><span></span>
+      <div class="filter-chips" id="obras-chips">
+        <div class="chip active" onclick="filtrarObras(this,'')">Todas</div>
+        <div class="chip" onclick="filtrarObras(this,'En ejecución')">En ejecución</div>
+        <div class="chip" onclick="filtrarObras(this,'Pendiente OIO')">Pendiente OIO</div>
+        <div class="chip" onclick="filtrarObras(this,'Para cierre')">Para cierre</div>
+        <div class="chip" onclick="filtrarObras(this,'Cerrada')">Cerradas</div>
       </div>
-      <div class="topbar-title" id="topbar-title">Dashboard</div>
-      <button class="btn btn-outline btn-sm" onclick="refreshView()">↻ Actualizar</button>
+      <div id="obras-list"><div class="loader"><div class="spinner"></div>Cargando...</div></div>
     </div>
-    <div class="content" id="content"></div>
+
+    <!-- INVENTARIO -->
+    <div class="module" id="mod-inventario">
+      <div class="flex between mb12">
+        <h2 style="font-size:16px;font-weight:700;">Inventario</h2>
+        <div class="flex gap8">
+          <button class="btn btn-success btn-sm" id="btn-ingreso" onclick="abrirModalMovimiento('ingreso')">+ Ingreso</button>
+          <button class="btn btn-outline btn-sm" id="btn-egreso" onclick="abrirModalMovimiento('egreso')">− Egreso</button>
+        </div>
+      </div>
+      <div class="filter-chips">
+        <div class="chip active" onclick="filtrarInventario(this,'')">Todo</div>
+        <div class="chip" onclick="filtrarInventario(this,'critico')">⚠ Críticos</div>
+        <div class="chip" onclick="filtrarInventario(this,'Herramienta')">Herramientas</div>
+        <div class="chip" onclick="filtrarInventario(this,'Consumo')">Materiales</div>
+        <div class="chip" onclick="filtrarInventario(this,'Reutilizable')">Reutilizables</div>
+      </div>
+      <div id="inventario-list"><div class="loader"><div class="spinner"></div>Cargando...</div></div>
+    </div>
+
+    <!-- MOVIMIENTOS -->
+    <div class="module" id="mod-movimientos">
+      <h2 style="font-size:16px;font-weight:700;margin-bottom:12px;">Movimientos F-02 / F-03</h2>
+      <div id="movimientos-list"><div class="loader"><div class="spinner"></div>Cargando...</div></div>
+    </div>
+
+    <!-- COMPRAS -->
+    <div class="module" id="mod-compras">
+      <div class="flex between mb12">
+        <h2 style="font-size:16px;font-weight:700;">Compras</h2>
+        <button class="btn btn-primary btn-sm" onclick="abrirModalCompra()">+ Solicitar</button>
+      </div>
+      <div id="compras-list"><div class="loader"><div class="spinner"></div>Cargando...</div></div>
+    </div>
+
+    <!-- COSTOS -->
+    <div class="module" id="mod-costos">
+      <h2 style="font-size:16px;font-weight:700;margin-bottom:12px;">Centro de Costos</h2>
+      <div class="form-group">
+        <label>Seleccionar obra</label>
+        <select class="select" id="costos-obra-sel" onchange="cargarCostos(this.value)">
+          <option value="">— elegir obra —</option>
+        </select>
+      </div>
+      <div id="costos-content"></div>
+    </div>
+
+    <!-- TÉCNICOS -->
+    <div class="module" id="mod-tecnicos">
+      <h2 style="font-size:16px;font-weight:700;margin-bottom:12px;">Técnicos</h2>
+      <div id="tecnicos-list"><div class="loader"><div class="spinner"></div>Cargando...</div></div>
+    </div>
+
+    <!-- MIS TAREAS -->
+    <div class="module" id="mod-mis_tareas">
+      <h2 style="font-size:16px;font-weight:700;margin-bottom:12px;">Mis tareas</h2>
+      <div id="mistareas-content"><div class="loader"><div class="spinner"></div>Cargando...</div></div>
+    </div>
+
+    <!-- TRAZABILIDAD -->
+    <div class="module" id="mod-trazabilidad">
+      <h2 style="font-size:16px;font-weight:700;margin-bottom:12px;">Trazabilidad</h2>
+      <div id="traza-list"><div class="loader"><div class="spinner"></div>Cargando...</div></div>
+    </div>
+
   </div>
 </div>
 
-<!-- ══════════════════════════════════════════════════════
-     MODALES
-══════════════════════════════════════════════════════ -->
-<div class="modal-backdrop hidden" id="modal-backdrop">
-  <div class="modal" id="modal-body"></div>
+<div id="toast"></div>
+<div class="modal-bg hidden" id="modal-bg" onclick="cerrarModalBg(event)">
+  <div class="modal" id="modal-content"></div>
 </div>
-
-<!-- Toast -->
-<div id="toast" style="opacity:0"></div>
 
 <script>
-// ═══════════════════════════════════════════════════════════
-// CONFIGURACIÓN — Pegá acá tu URL de Apps Script
-// ═══════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════
+// CONFIGURACIÓN — TU URL DE APPS SCRIPT
+// ══════════════════════════════════════════════
 const API_URL = "https://script.google.com/macros/s/AKfycbysdLOdxeufCTCSzHotogb0lI5ooud8MvtbTiYxovpgq2l99HtJCi4lff5yHftyGbES/exec";
 
-// ═══════════════════════════════════════════════════════════
-// ESTADO GLOBAL
-// ═══════════════════════════════════════════════════════════
-let USER   = null;
-let TOKEN  = null;
-let VISTA  = null;
+// ══════════════════════════════════════════════
+// ESTADO
+// ══════════════════════════════════════════════
+const S = { token:null, user:null, obras:[], inventario:[], filtroObras:'', filtroInv:'' };
 
-// Menú por módulo
-const MENU_CONFIG = [
-  { mod:"dashboard",    icon:"📊", label:"Dashboard",          section:"Principal" },
-  { mod:"mis_tareas",   icon:"✅", label:"Mis tareas",          section:"Principal" },
-  { mod:"obras",        icon:"🏗️", label:"Obras / Proyectos",   section:"Operaciones" },
-  { mod:"inventario",   icon:"📦", label:"Inventario / Pañol",  section:"Operaciones" },
-  { mod:"movimientos",  icon:"🔄", label:"Retiros y devoluc.",  section:"Operaciones" },
-  { mod:"tecnicos",     icon:"👷", label:"Técnicos",            section:"Operaciones" },
-  { mod:"compras",      icon:"🛒", label:"Compras",             section:"Administración" },
-  { mod:"costos",       icon:"💰", label:"Centro de costos",    section:"Administración" },
-  { mod:"comercial",    icon:"📈", label:"Comercial",           section:"Administración" },
-  { mod:"contabilidad", icon:"🧾", label:"Contabilidad",        section:"Administración" },
-  { mod:"trazabilidad", icon:"📜", label:"Trazabilidad",        section:"Control" },
-  { mod:"reportes",     icon:"📄", label:"Reportes PDF",        section:"Control" },
-  { mod:"usuarios",     icon:"👤", label:"Usuarios",            section:"Control" },
-];
-
-// ═══════════════════════════════════════════════════════════
-// API
-// ═══════════════════════════════════════════════════════════
-
-async function api(action, params = {}, body = null) {
-  const url = new URL(API_URL);
-  url.searchParams.set("action", action);
-  if (TOKEN) url.searchParams.set("token", TOKEN);
-  Object.entries(params).forEach(([k,v]) => url.searchParams.set(k, v));
-
-  const opts = body
-    ? { method:"POST", body: JSON.stringify({ ...body, token: TOKEN }) }
-    : { method:"GET" };
-
-  const res  = await fetch(url.toString(), opts);
-  const data = await res.json();
-  if (!data.ok) throw new Error(data.error || "Error desconocido");
-  return data.data;
-}
-
-// ═══════════════════════════════════════════════════════════
-// AUTH
-// ═══════════════════════════════════════════════════════════
-
-async function doLogin() {
-  const email = document.getElementById("login-email").value.trim();
-  const pass  = document.getElementById("login-pass").value;
-  const btn   = document.getElementById("btn-login");
-  const err   = document.getElementById("login-error");
-
-  if (!email || !pass) { showError(err, "Completá email y contraseña"); return; }
-  err.classList.add("hidden");
-  btn.textContent = "Ingresando...";
-  btn.disabled = true;
-
-  try {
-    // Login va por POST con body
+// ══════════════════════════════════════════════
+// API — usa JSONP para evitar problemas de CORS con Apps Script
+// ══════════════════════════════════════════════
+function api(action, params={}) {
+  return new Promise((resolve, reject) => {
+    const cbName = 'cb_' + Date.now() + '_' + Math.random().toString(36).slice(2);
     const url = new URL(API_URL);
-    url.searchParams.set("action", "login");
-    const res  = await fetch(url.toString(), {
-      method: "POST",
-      body: JSON.stringify({ email, password: pass }),
+    url.searchParams.set('action', action);
+    url.searchParams.set('callback', cbName);
+    if (S.token) url.searchParams.set('token', S.token);
+    Object.entries(params).forEach(([k,v]) => {
+      if (v !== null && v !== undefined) url.searchParams.set(k, typeof v === 'object' ? JSON.stringify(v) : v);
     });
-    const data = await res.json();
-    if (!data.ok) throw new Error(data.error);
 
-    TOKEN = data.data.token;
-    USER  = data.data.user;
-    localStorage.setItem("fibracor_token", TOKEN);
-    localStorage.setItem("fibracor_user",  JSON.stringify(USER));
-    initApp();
-  } catch(e) {
-    showError(err, e.message);
-    btn.textContent = "Ingresar";
-    btn.disabled = false;
-  }
-}
+    const script = document.createElement('script');
+    const timer  = setTimeout(() => {
+      cleanup();
+      reject(new Error('Tiempo de espera agotado. Verificá tu conexión.'));
+    }, 20000);
 
-function logout() {
-  localStorage.removeItem("fibracor_token");
-  localStorage.removeItem("fibracor_user");
-  USER = TOKEN = null;
-  document.getElementById("app").classList.add("hidden");
-  document.getElementById("screen-login").style.display = "flex";
-}
+    window[cbName] = (data) => {
+      cleanup();
+      if (data.ok) resolve(data.data);
+      else reject(new Error(data.error || 'Error desconocido'));
+    };
 
-function showError(el, msg) {
-  el.textContent = msg;
-  el.classList.remove("hidden");
-}
-
-// ═══════════════════════════════════════════════════════════
-// INIT APP
-// ═══════════════════════════════════════════════════════════
-
-function initApp() {
-  document.getElementById("screen-login").style.display = "none";
-  document.getElementById("app").classList.remove("hidden");
-
-  // Avatar y nombre
-  const initials = (USER.nombre||"?").split(/[\s,]+/).map(p=>p[0]).join("").slice(0,2).toUpperCase();
-  document.getElementById("user-avatar").textContent = initials;
-  document.getElementById("user-name").textContent   = USER.nombre;
-  document.getElementById("user-area").textContent   = USER.area + " · " + USER.rol;
-
-  // Construir nav según módulos habilitados
-  buildNav();
-
-  // Ir al primer módulo disponible
-  const first = USER.modulos?.[0] || "dashboard";
-  goTo(first);
-}
-
-function buildNav() {
-  const nav     = document.getElementById("nav-menu");
-  nav.innerHTML = "";
-  let lastSection = "";
-
-  MENU_CONFIG.forEach(item => {
-    if (!USER.modulos?.includes(item.mod)) return;
-    if (item.section !== lastSection) {
-      const sec = document.createElement("div");
-      sec.className = "nav-section";
-      sec.textContent = item.section;
-      nav.appendChild(sec);
-      lastSection = item.section;
+    function cleanup() {
+      clearTimeout(timer);
+      delete window[cbName];
+      if (script.parentNode) script.parentNode.removeChild(script);
     }
-    const el = document.createElement("div");
-    el.className = "nav-item";
-    el.id = "nav-" + item.mod;
-    el.innerHTML = `<span class="nav-icon">${item.icon}</span>${item.label}`;
-    el.onclick = () => { goTo(item.mod); closeSidebar(); };
-    nav.appendChild(el);
+
+    script.onerror = () => { cleanup(); reject(new Error('Error de red')); };
+    script.src = url.toString();
+    document.head.appendChild(script);
   });
 }
 
-function goTo(mod) {
-  VISTA = mod;
-  document.querySelectorAll(".nav-item").forEach(el => el.classList.remove("active"));
-  const navEl = document.getElementById("nav-" + mod);
-  if (navEl) navEl.classList.add("active");
-  const cfg = MENU_CONFIG.find(m => m.mod === mod);
-  document.getElementById("topbar-title").textContent = cfg ? cfg.label : mod;
-  renderView(mod);
-}
-
-function refreshView() { if (VISTA) renderView(VISTA); }
-
-async function renderView(mod) {
-  const content = document.getElementById("content");
-  content.innerHTML = `<div class="spinner"></div>`;
+// ══════════════════════════════════════════════
+// AUTH
+// ══════════════════════════════════════════════
+async function doLogin() {
+  const email = document.getElementById('login-email').value.trim();
+  const pass  = document.getElementById('login-pass').value;
+  const err   = document.getElementById('login-error');
+  const btn   = document.getElementById('btn-login');
+  if (!email || !pass) { showErr(err,'Completá email y contraseña'); return; }
+  btn.disabled = true; btn.textContent = 'Ingresando...'; err.classList.add('hidden');
   try {
-    switch(mod) {
-      case "dashboard":   await renderDashboard(content);   break;
-      case "obras":       await renderObras(content);       break;
-      case "inventario":  await renderInventario(content);  break;
-      case "movimientos": await renderMovimientos(content); break;
-      case "compras":     await renderCompras(content);     break;
-      case "costos":      await renderCostos(content);      break;
-      case "tecnicos":    await renderTecnicos(content);    break;
-      case "trazabilidad":await renderTrazabilidad(content);break;
-      case "usuarios":    await renderUsuarios(content);    break;
-      case "mis_tareas":  await renderMisTareas(content);   break;
-      default: content.innerHTML = `<div class="card"><p class="text2">Módulo en construcción: ${mod}</p></div>`;
-    }
+    const data = await api('login', { email, password: pass });
+    S.token = data.token; S.user = data.user;
+    localStorage.setItem('fc_token', data.token);
+    localStorage.setItem('fc_user',  JSON.stringify(data.user));
+    iniciarApp();
   } catch(e) {
-    content.innerHTML = `<div class="alert alert-red">Error cargando ${mod}: ${e.message}</div>`;
+    showErr(err, e.message);
+    btn.disabled = false; btn.textContent = 'Ingresar';
   }
 }
 
-// ═══════════════════════════════════════════════════════════
+function doLogout() {
+  S.token=null; S.user=null;
+  localStorage.removeItem('fc_token'); localStorage.removeItem('fc_user');
+  document.getElementById('screen-app').style.display = 'none';
+  document.getElementById('screen-login').style.display = 'flex';
+}
+
+function showErr(el, msg) { el.textContent=msg; el.classList.remove('hidden'); }
+
+document.getElementById('login-pass').addEventListener('keydown', e => { if(e.key==='Enter') doLogin(); });
+
+// ══════════════════════════════════════════════
+// MÓDULOS
+// ══════════════════════════════════════════════
+const MOD_META = {
+  dashboard:    {icon:'🏠',label:'Inicio'},
+  obras:        {icon:'🏗',label:'Obras'},
+  inventario:   {icon:'📦',label:'Stock'},
+  movimientos:  {icon:'🔄',label:'Retiros'},
+  compras:      {icon:'🛒',label:'Compras'},
+  costos:       {icon:'💰',label:'Costos'},
+  tecnicos:     {icon:'👷',label:'Técnicos'},
+  mis_tareas:   {icon:'📋',label:'Mis tareas'},
+  trazabilidad: {icon:'📜',label:'Registro'},
+};
+const MODS_IMPL = Object.keys(MOD_META);
+
+function iniciarApp() {
+  const u = S.user;
+  document.getElementById('screen-login').style.display = 'none';
+  const app = document.getElementById('screen-app');
+  app.style.display = 'flex';
+  app.style.flexDirection = 'column';
+  document.getElementById('topbar-user').textContent = u.nombre;
+  document.getElementById('topbar-area').textContent = u.area;
+
+  // Construir nav
+  const nav = document.getElementById('main-nav');
+  nav.innerHTML = '';
+  const mods = (u.modulos||[]).filter(m => MODS_IMPL.includes(m));
+  const orden = ['dashboard','obras','inventario','mis_tareas','compras','costos','tecnicos','movimientos','trazabilidad'];
+  const sorted = [...orden.filter(m=>mods.includes(m)), ...mods.filter(m=>!orden.includes(m))].slice(0,5);
+
+  sorted.forEach((mod,i) => {
+    const m = MOD_META[mod]||{icon:'📌',label:mod};
+    const t = document.createElement('button');
+    t.className = 'nav-tab' + (i===0?' active':'');
+    t.dataset.mod = mod;
+    t.innerHTML = `<span class="nav-tab-icon">${m.icon}</span><span class="nav-tab-label">${m.label}</span>`;
+    t.onclick = () => activarMod(mod);
+    nav.appendChild(t);
+  });
+
+  // Permisos UI
+  if (!u.puede?.ingresar_mercaderia) document.getElementById('btn-ingreso')?.classList.add('hidden');
+  if (!u.puede?.retirar_material)    document.getElementById('btn-egreso')?.classList.add('hidden');
+  if (!['Dirección','Comercial'].includes(u.area)) document.getElementById('btn-nueva-obra')?.classList.add('hidden');
+
+  activarMod('dashboard');
+}
+
+function activarMod(mod) {
+  document.querySelectorAll('.module').forEach(m=>m.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(t=>t.classList.remove('active'));
+  document.getElementById('mod-'+mod)?.classList.add('active');
+  document.querySelector(`.nav-tab[data-mod="${mod}"]`)?.classList.add('active');
+  const loaders = {
+    dashboard:'cargarDashboard', obras:'cargarObras', inventario:'cargarInventario',
+    movimientos:'cargarMovimientos', compras:'cargarCompras', tecnicos:'cargarTecnicos',
+    mis_tareas:'cargarMisTareas', trazabilidad:'cargarTrazabilidad', costos:'cargarSelectObras'
+  };
+  if (loaders[mod]) window[loaders[mod]]();
+}
+
+// ══════════════════════════════════════════════
 // DASHBOARD
-// ═══════════════════════════════════════════════════════════
-
-async function renderDashboard(el) {
-  const d = await api("getDashboard");
-  el.innerHTML = `
-    <div class="metrics-grid">
-      <div class="metric-card">
-        <div class="metric-label">Obras activas</div>
-        <div class="metric-val" style="color:var(--navy)">${d.obras.activas}</div>
-        <div class="metric-sub">${d.obras.total} total · ${d.obras.para_cierre} para cierre</div>
-      </div>
-      <div class="metric-card">
-        <div class="metric-label">Stock crítico</div>
-        <div class="metric-val" style="color:${d.inventario.criticos>0?'var(--red)':'var(--green)'}">${d.inventario.criticos}</div>
-        <div class="metric-sub">ítems bajo mínimo</div>
-      </div>
-      <div class="metric-card">
-        <div class="metric-label">Compras pendientes</div>
-        <div class="metric-val" style="color:var(--amber)">${d.compras.pendientes_aprobacion}</div>
-        <div class="metric-sub">esperando aprobación</div>
-      </div>
-      <div class="metric-card">
-        <div class="metric-label">Técnicos disponibles</div>
-        <div class="metric-val" style="color:var(--green)">${d.tecnicos.disponibles}</div>
-        <div class="metric-sub">${d.tecnicos.en_obra} en obra · ${d.tecnicos.de_viaje} de viaje</div>
-      </div>
-    </div>
-    ${d.inventario.criticos>0 ? `
-    <div class="alert alert-red mb12">
-      ⚠ Stock crítico en ${d.inventario.criticos} ítem(s):
-      ${d.inventario.criticos_lista.map(i=>`<br>• ${i.descripcion} — disponible: ${i.disponible} (mín: ${i.minimo})`).join("")}
-    </div>` : ""}
-    <div class="card mb12">
-      <div class="bold mb8">Actividad reciente</div>
-      ${(d.ultimos_eventos||[]).length === 0
-        ? '<p class="text2 small">Sin eventos recientes</p>'
-        : (d.ultimos_eventos||[]).map(e=>`
-        <div style="padding:7px 0;border-bottom:1px solid var(--border);font-size:13px;">
-          <span class="text3 small">${e.timestamp||""} · ${e.obra_id||""}</span><br>
-          <span class="semi">${e.evento||""}</span> — ${e.detalle||""}
-        </div>`).join("")}
+// ══════════════════════════════════════════════
+async function cargarDashboard() {
+  const el = document.getElementById('dash-content');
+  el.innerHTML = '<div class="loader"><div class="spinner"></div>Conectando con el Sheet...</div>';
+  try {
+    const d = await api('getDashboard');
+    const u = S.user;
+    let html = `<div class="card" style="border-left:4px solid var(--navy);">
+      <div style="font-size:15px;font-weight:700;">Bienvenido, ${u.nombre}</div>
+      <div class="small muted mt8">${u.rol} · ${u.area}</div>
     </div>`;
-}
 
-// ═══════════════════════════════════════════════════════════
-// INVENTARIO
-// ═══════════════════════════════════════════════════════════
-
-async function renderInventario(el) {
-  const d = await api("getInventario");
-  const puedeIngresar = d.puede_ingresar;
-  const puedeEgresar  = d.puede_egresar;
-
-  el.innerHTML = `
-    <div class="flex justify-between items-center mb12">
-      <div>
-        <span class="bold">${d.total} ítems</span>
-        ${d.criticos>0 ? `<span class="badge badge-red ml8">⚠ ${d.criticos} críticos</span>`:""}
-      </div>
-      <div class="flex gap8">
-        ${puedeIngresar ? `<button class="btn btn-success btn-sm" onclick="modalIngreso()">+ Ingresar</button>`:""}
-        ${puedeEgresar  ? `<button class="btn btn-primary btn-sm" onclick="modalEgreso()">− Retirar</button>`:""}
-      </div>
-    </div>
-    ${d.items.map(item => `
-    <div class="inv-card">
-      <div class="inv-card-header">
-        <div>
-          <div class="inv-item-name">${item.descripcion}</div>
-          <div class="inv-item-code">${item.item_id} · ${item.categoria}</div>
-        </div>
-        <span class="badge ${item.alerta_critica?'badge-red':'badge-green'}">${item.alerta_critica?'⚠ Bajo stock':'✓ OK'}</span>
-      </div>
-      <div class="stock-bars">
-        ${item.stock_disponible>0 ? `<div class="stock-seg flex1" style="background:#2E7D32;max-width:${pct(item.stock_disponible,item.stock_disponible+item.stock_en_obra+item.stock_fuera_servicio)}%"></div>`:""}
-        ${item.stock_en_obra>0 ? `<div class="stock-seg flex1" style="background:#1B3D6E;max-width:${pct(item.stock_en_obra,item.stock_disponible+item.stock_en_obra+item.stock_fuera_servicio)}%"></div>`:""}
-        ${item.stock_fuera_servicio>0 ? `<div class="stock-seg flex1" style="background:#C62828;max-width:${pct(item.stock_fuera_servicio,item.stock_disponible+item.stock_en_obra+item.stock_fuera_servicio)}%"></div>`:""}
-      </div>
-      <div class="stock-legend">
-        <span><span class="stock-dot" style="background:#2E7D32"></span>Disponible: <b>${item.stock_disponible}</b> ${item.unidad}</span>
-        <span><span class="stock-dot" style="background:#1B3D6E"></span>En obra: <b>${item.stock_en_obra}</b></span>
-        ${item.stock_fuera_servicio>0?`<span><span class="stock-dot" style="background:#C62828"></span>F. servicio: <b>${item.stock_fuera_servicio}</b></span>`:""}
-      </div>
-      ${item.stock_minimo>0?`<div class="small text2 mt4">Mínimo requerido: ${item.stock_minimo} ${item.unidad}</div>`:""}
-      <div class="flex gap8 mt8">
-        ${puedeIngresar?`<button class="btn btn-success btn-sm" onclick='modalIngreso("${item.item_id}","${item.descripcion}")'>+ Ingresar</button>`:""}
-        ${puedeEgresar?`<button class="btn btn-outline btn-sm" onclick='modalEgreso("${item.item_id}","${item.descripcion}")'>− Retirar</button>`:""}
-        <button class="btn btn-outline btn-sm" onclick='verHistorialItem("${item.item_id}","${item.descripcion}")'>Historial</button>
-      </div>
-    </div>`).join("")}`;
-}
-
-function pct(val, total) {
-  if (!total) return 0;
-  return Math.round((val/total)*100);
-}
-
-// Modal ingreso de mercadería
-async function modalIngreso(itemId="", desc="") {
-  const obras = await api("getObras");
-  openModal(`
-    <div class="modal-title">📦 Ingresar mercadería al depósito</div>
-    <div class="form-group">
-      <label class="label">Código de ítem</label>
-      <input class="input" id="m-item-id" value="${itemId}" placeholder="ej: MAT-001">
-    </div>
-    <div class="form-group">
-      <label class="label">Descripción</label>
-      <input class="input" id="m-desc" value="${desc}" placeholder="Nombre del ítem">
-    </div>
-    <div class="form-group">
-      <label class="label">Cantidad a ingresar</label>
-      <input class="input" id="m-cant" type="number" min="1" placeholder="0">
-    </div>
-    <div class="form-group">
-      <label class="label">Concepto / motivo</label>
-      <input class="input" id="m-concepto" placeholder="ej: Compra COM-001, Devolución de obra">
-    </div>
-    <div class="form-group">
-      <label class="label">N° remito / factura (opcional)</label>
-      <input class="input" id="m-ref" placeholder="ej: FAC-2024-0089">
-    </div>
-    <button class="btn btn-success btn-block mt8" onclick="confirmarIngreso()">✓ Confirmar ingreso</button>
-    <button class="btn btn-outline btn-block mt8" onclick="closeModal()">Cancelar</button>
-  `);
-}
-
-async function confirmarIngreso() {
-  const itemId   = document.getElementById("m-item-id").value.trim();
-  const cantidad = parseFloat(document.getElementById("m-cant").value);
-  const concepto = document.getElementById("m-concepto").value.trim();
-  const ref      = document.getElementById("m-ref").value.trim();
-  if (!itemId || !cantidad || cantidad<=0) { toast("Completá ítem y cantidad"); return; }
-  try {
-    await api("ingresarMercaderia", {}, { item_id:itemId, cantidad, concepto, referencia:ref });
-    closeModal();
-    toast("✓ Ingreso registrado correctamente");
-    renderView("inventario");
-  } catch(e) { toast("Error: "+e.message); }
-}
-
-// Modal egreso / retiro
-async function modalEgreso(itemId="", desc="") {
-  const obras = await api("getObras");
-  openModal(`
-    <div class="modal-title">📤 Retirar material del depósito</div>
-    <div class="form-group">
-      <label class="label">Código de ítem</label>
-      <input class="input" id="m-item-id" value="${itemId}" placeholder="ej: HER-001">
-    </div>
-    <div class="form-group">
-      <label class="label">Cantidad a retirar</label>
-      <input class="input" id="m-cant" type="number" min="1" placeholder="0">
-    </div>
-    <div class="form-group">
-      <label class="label">Tipo de movimiento</label>
-      <select class="select" id="m-tipo">
-        <option value="Retiro">Retiro para obra</option>
-        <option value="Devolucion">Devolución de obra</option>
-        <option value="Baja">Baja / descarte</option>
-      </select>
-    </div>
-    <div class="form-group">
-      <label class="label">Obra asociada</label>
-      <select class="select" id="m-obra">
-        <option value="">Sin obra específica</option>
-        ${obras.obras.map(o=>`<option value="${o.obra_id}">${o.obra_id} — ${o.cliente}</option>`).join("")}
-      </select>
-    </div>
-    <div class="form-group">
-      <label class="label">Estado herramienta (si aplica)</label>
-      <select class="select" id="m-estado-herr">
-        <option value="N/A">N/A — no es herramienta</option>
-        <option value="OK">OK — en buen estado</option>
-        <option value="Con observaciones">Con observaciones</option>
-      </select>
-    </div>
-    <div class="form-group">
-      <label class="label">Referencia formulario (ej: F-02 #001)</label>
-      <input class="input" id="m-form-ref" placeholder="F-02 #001">
-    </div>
-    <div class="form-group">
-      <label class="label">Observaciones</label>
-      <input class="input" id="m-obs" placeholder="Notas adicionales">
-    </div>
-    <button class="btn btn-primary btn-block mt8" onclick="confirmarEgreso()">✓ Confirmar retiro</button>
-    <button class="btn btn-outline btn-block mt8" onclick="closeModal()">Cancelar</button>
-  `);
-}
-
-async function confirmarEgreso() {
-  const itemId   = document.getElementById("m-item-id").value.trim();
-  const cantidad = parseFloat(document.getElementById("m-cant").value);
-  const tipo     = document.getElementById("m-tipo").value;
-  const obraId   = document.getElementById("m-obra").value;
-  const estHerr  = document.getElementById("m-estado-herr").value;
-  const formRef  = document.getElementById("m-form-ref").value;
-  const obs      = document.getElementById("m-obs").value;
-  if (!itemId || !cantidad || cantidad<=0) { toast("Completá ítem y cantidad"); return; }
-  try {
-    await api("egresarMercaderia", {}, { item_id:itemId, cantidad, tipo_mov:tipo, obra_id:obraId,
-      estado_herramienta:estHerr, formulario_ref:formRef, observaciones:obs });
-    closeModal();
-    toast("✓ " + tipo + " registrado correctamente");
-    renderView("inventario");
-  } catch(e) { toast("Error: "+e.message); }
-}
-
-async function verHistorialItem(itemId, desc) {
-  const d = await api("getHistorialItem", { item_id: itemId });
-  openModal(`
-    <div class="modal-title">📋 Historial — ${desc}</div>
-    ${d.movimientos.length===0 ? '<p class="text2">Sin movimientos registrados</p>' :
-    `<div style="overflow-x:auto"><table>
-      <tr><th>Fecha</th><th>Tipo</th><th>Cant.</th><th>Obra</th><th>Responsable</th></tr>
-      ${d.movimientos.map(m=>`<tr>
-        <td>${m.fecha}</td>
-        <td><span class="badge ${m.tipo_mov==='Retiro'?'badge-blue':m.tipo_mov==='Devolucion'?'badge-green':'badge-amber'}">${m.tipo_mov}</span></td>
-        <td>${m.cantidad}</td><td>${m.obra_id||'—'}</td><td>${m.responsable}</td>
-      </tr>`).join("")}
-    </table></div>`}
-    <button class="btn btn-outline btn-block mt12" onclick="closeModal()">Cerrar</button>
-  `);
-}
-
-// ═══════════════════════════════════════════════════════════
-// OBRAS
-// ═══════════════════════════════════════════════════════════
-
-async function renderObras(el) {
-  const d = await api("getObras");
-  const puedeCrear = ["Dirección","Comercial"].includes(USER.area);
-
-  el.innerHTML = `
-    <div class="flex justify-between items-center mb12">
-      <div class="bold">${d.total} obras</div>
-      ${puedeCrear ? `<button class="btn btn-primary btn-sm" onclick="modalNuevaObra()">+ Nueva OIO</button>`:""}
-    </div>
-    ${d.obras.map(o => {
-      const etapaColor = o.etapa_actual>=7?"#2E7D32":o.etapa_actual>=4?"#1B3D6E":"#F57F17";
-      return `
-      <div class="obra-card" onclick="verObraDetalle('${o.obra_id}')">
-        <div class="flex justify-between items-center">
-          <div>
-            <div class="bold">${o.obra_id} — ${o.cliente}</div>
-            <div class="small text2">${o.nombre_obra}</div>
-          </div>
-          <span class="badge ${estadoBadge(o.estado)}">${o.estado}</span>
-        </div>
-        <div class="obra-etapa">
-          <div class="etapa-dot" style="background:${etapaColor}"></div>
-          <span class="small text2">Etapa ${o.etapa_actual}/8 · Jefe: ${o.jefe_obra||'—'}</span>
-          ${o.presupuesto ? `<span class="small text3 ml8">$${parseFloat(o.presupuesto).toLocaleString('es-AR')}</span>`:""}
-        </div>
-      </div>`}).join("")}`;
-}
-
-function estadoBadge(estado) {
-  const m = { "En ejecución":"badge-green","Cerrada":"badge-gray","Para cierre":"badge-teal","Pendiente OIO":"badge-amber","Planificación":"badge-blue" };
-  return m[estado] || "badge-gray";
-}
-
-async function verObraDetalle(obraId) {
-  const d = await api("getObraDetalle", { obra_id: obraId });
-  const o = d.obra;
-  openModal(`
-    <div class="modal-title">🏗️ ${o.obra_id} — ${o.cliente}</div>
-    <div class="small text2 mb12">${o.nombre_obra}</div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;">
-      <div class="card" style="padding:10px"><div class="xsmall text2">Estado</div><div class="semi small">${o.estado}</div></div>
-      <div class="card" style="padding:10px"><div class="xsmall text2">Etapa</div><div class="semi small">${o.etapa_actual}/8</div></div>
-      <div class="card" style="padding:10px"><div class="xsmall text2">Jefe de obra</div><div class="semi small">${o.jefe_obra||'—'}</div></div>
-      <div class="card" style="padding:10px"><div class="xsmall text2">Presupuesto</div><div class="semi small">$${parseFloat(o.presupuesto||0).toLocaleString('es-AR')}</div></div>
-    </div>
-    <div class="bold small mb8">Recursos planificados (${d.recursos.length})</div>
-    ${d.recursos.length===0?'<p class="text2 small">Sin recursos cargados</p>':
-    `<div style="overflow-x:auto"><table>
-      <tr><th>Ítem</th><th>Tipo</th><th>Planificado</th><th>Estado</th></tr>
-      ${d.recursos.map(r=>`<tr>
-        <td>${r.item_id}</td><td>${r.tipo}</td>
-        <td>${r.cantidad_planificada} ${r.unidad}</td>
-        <td><span class="badge ${r.estado_stock==='Disponible'?'badge-green':r.estado_stock==='Parcial'?'badge-amber':'badge-red'}">${r.estado_stock||'—'}</span></td>
-      </tr>`).join("")}
-    </table></div>`}
-    <button class="btn btn-outline btn-block mt12" onclick="closeModal()">Cerrar</button>
-  `);
-}
-
-async function modalNuevaObra() {
-  const tecnicos = await api("getTecnicos");
-  openModal(`
-    <div class="modal-title">📋 Nueva Orden de Inicio de Obra (F-01)</div>
-    <div class="form-group"><label class="label">Código de obra</label><input class="input" id="o-id" placeholder="ej: NH-02"></div>
-    <div class="form-group"><label class="label">Cliente *</label><input class="input" id="o-cliente" placeholder="Razón social"></div>
-    <div class="form-group"><label class="label">Nombre / descripción *</label><input class="input" id="o-nombre" placeholder="Descripción del proyecto"></div>
-    <div class="form-group"><label class="label">Sitio / dirección</label><input class="input" id="o-sitio" placeholder="Ubicación de la obra"></div>
-    <div class="form-group"><label class="label">Alcance técnico</label><input class="input" id="o-alcance" placeholder="Trabajos a ejecutar"></div>
-    <div class="form-row">
-      <div class="form-group"><label class="label">Fecha inicio</label><input class="input" id="o-inicio" type="date"></div>
-      <div class="form-group"><label class="label">Fecha fin</label><input class="input" id="o-fin" type="date"></div>
-    </div>
-    <div class="form-group"><label class="label">Jefe de obra</label>
-      <select class="select" id="o-jefe">
-        <option value="">Seleccionar técnico</option>
-        ${tecnicos.tecnicos.map(t=>`<option value="${t.nombre}">${t.nombre} — ${t.estado}</option>`).join("")}
-      </select>
-    </div>
-    <div class="form-group"><label class="label">Presupuesto ($)</label><input class="input" id="o-presupuesto" type="number" placeholder="0"></div>
-    <div class="form-group"><label class="label">Observaciones</label><input class="input" id="o-obs" placeholder="Condiciones especiales"></div>
-    <button class="btn btn-primary btn-block mt8" onclick="confirmarNuevaObra()">✓ Emitir OIO</button>
-    <button class="btn btn-outline btn-block mt8" onclick="closeModal()">Cancelar</button>
-  `);
-}
-
-async function confirmarNuevaObra() {
-  const data = {
-    obra_id: document.getElementById("o-id").value.trim(),
-    cliente: document.getElementById("o-cliente").value.trim(),
-    nombre_obra: document.getElementById("o-nombre").value.trim(),
-    sitio: document.getElementById("o-sitio").value.trim(),
-    alcance_tecnico: document.getElementById("o-alcance").value.trim(),
-    fecha_inicio_est: document.getElementById("o-inicio").value,
-    fecha_fin_est: document.getElementById("o-fin").value,
-    jefe_obra: document.getElementById("o-jefe").value,
-    presupuesto: document.getElementById("o-presupuesto").value,
-    observaciones: document.getElementById("o-obs").value.trim(),
-    emitida_por: USER.nombre,
-  };
-  if (!data.cliente || !data.nombre_obra) { toast("Cliente y nombre son obligatorios"); return; }
-  try {
-    const r = await api("createObra", {}, data);
-    closeModal();
-    toast("✓ OIO " + r.obraId + " emitida correctamente");
-    renderView("obras");
-  } catch(e) { toast("Error: "+e.message); }
-}
-
-// ═══════════════════════════════════════════════════════════
-// COMPRAS
-// ═══════════════════════════════════════════════════════════
-
-async function renderCompras(el) {
-  const d = await api("getCompras");
-  const puedeAprobar = USER.puede?.aprobar_compras;
-  const puedeSolicitar = ["Dirección","Operaciones"].includes(USER.area);
-
-  el.innerHTML = `
-    <div class="flex justify-between items-center mb12">
-      <div class="bold">${d.total} solicitudes</div>
-      ${puedeSolicitar?`<button class="btn btn-primary btn-sm" onclick="modalNuevaCompra()">+ Solicitar compra</button>`:""}
-    </div>
-    <div class="table-wrap">
-    <table>
-      <tr><th>ID</th><th>Obra</th><th>Ítem</th><th>Cant.</th><th>Prioridad</th><th>Estado</th>${puedeAprobar?'<th>Acción</th>':''}</tr>
-      ${d.compras.map(c=>`<tr>
-        <td class="xsmall">${c.compra_id}</td>
-        <td>${c.obra_id}</td>
-        <td>${c.descripcion}</td>
-        <td>${c.cantidad_faltante} ${c.unidad}</td>
-        <td><span class="badge ${c.prioridad==='Urgente'||c.prioridad==='Alta'?'badge-red':c.prioridad==='Media'?'badge-amber':'badge-gray'}">${c.prioridad}</span></td>
-        <td><span class="badge ${c.estado==='Aprobado'?'badge-green':c.estado==='Solicitado'?'badge-amber':'badge-gray'}">${c.estado}</span></td>
-        ${puedeAprobar&&c.estado==='Solicitado'?`<td><button class="btn btn-success btn-sm" onclick="aprobarCompra('${c.compra_id}')">Aprobar</button></td>`:'<td>—</td>'}
-      </tr>`).join("")}
-    </table></div>`;
-}
-
-async function aprobarCompra(compraId) {
-  try {
-    await api("aprobarCompra", {}, { compra_id: compraId });
-    toast("✓ Compra " + compraId + " aprobada");
-    renderView("compras");
-  } catch(e) { toast("Error: "+e.message); }
-}
-
-async function modalNuevaCompra() {
-  const obras = await api("getObras");
-  const inv   = await api("getInventario");
-  openModal(`
-    <div class="modal-title">🛒 Nueva solicitud de compra</div>
-    <div class="form-group"><label class="label">Obra asociada</label>
-      <select class="select" id="c-obra">
-        ${obras.obras.map(o=>`<option value="${o.obra_id}">${o.obra_id} — ${o.cliente}</option>`).join("")}
-      </select>
-    </div>
-    <div class="form-group"><label class="label">Ítem</label>
-      <select class="select" id="c-item">
-        ${inv.items.map(i=>`<option value="${i.item_id}">${i.item_id} — ${i.descripcion}</option>`).join("")}
-      </select>
-    </div>
-    <div class="form-group"><label class="label">Descripción</label><input class="input" id="c-desc" placeholder="Descripción del ítem"></div>
-    <div class="form-row">
-      <div class="form-group"><label class="label">Cantidad faltante</label><input class="input" id="c-cant" type="number" placeholder="0"></div>
-      <div class="form-group"><label class="label">Unidad</label><input class="input" id="c-unidad" placeholder="m / ud. / kg"></div>
-    </div>
-    <div class="form-group"><label class="label">Prioridad</label>
-      <select class="select" id="c-prior"><option>Urgente</option><option>Alta</option><option>Media</option><option>Normal</option></select>
-    </div>
-    <div class="form-group"><label class="label">Fecha límite necesaria</label><input class="input" id="c-fecha" type="date"></div>
-    <div class="form-group"><label class="label">Proveedor sugerido</label><input class="input" id="c-prov" placeholder="Nombre del proveedor"></div>
-    <button class="btn btn-primary btn-block mt8" onclick="confirmarCompra()">✓ Enviar solicitud</button>
-    <button class="btn btn-outline btn-block mt8" onclick="closeModal()">Cancelar</button>
-  `);
-}
-
-async function confirmarCompra() {
-  const data = {
-    obra_id: document.getElementById("c-obra").value,
-    item_id: document.getElementById("c-item").value,
-    descripcion: document.getElementById("c-desc").value.trim(),
-    cantidad_faltante: document.getElementById("c-cant").value,
-    unidad: document.getElementById("c-unidad").value.trim(),
-    prioridad: document.getElementById("c-prior").value,
-    fecha_limite: document.getElementById("c-fecha").value,
-    proveedor: document.getElementById("c-prov").value.trim(),
-  };
-  if (!data.cantidad_faltante) { toast("Cantidad requerida"); return; }
-  try {
-    const r = await api("createCompra", {}, data);
-    closeModal();
-    toast("✓ Solicitud " + r.compraId + " enviada");
-    renderView("compras");
-  } catch(e) { toast("Error: "+e.message); }
-}
-
-// ═══════════════════════════════════════════════════════════
-// COSTOS
-// ═══════════════════════════════════════════════════════════
-
-async function renderCostos(el) {
-  const obras = await api("getObras");
-  el.innerHTML = `
-    <div class="form-group mb12">
-      <label class="label">Seleccionar obra</label>
-      <select class="select" id="sel-obra-costo" onchange="cargarCostosObra(this.value)">
-        <option value="">Elegir obra...</option>
-        ${obras.obras.map(o=>`<option value="${o.obra_id}">${o.obra_id} — ${o.cliente}</option>`).join("")}
-      </select>
-    </div>
-    <div id="costos-detalle"><p class="text2 small">Seleccioná una obra para ver sus costos.</p></div>`;
-}
-
-async function cargarCostosObra(obraId) {
-  if (!obraId) return;
-  const d   = await api("getCostos", { obra_id: obraId });
-  const det = document.getElementById("costos-detalle");
-  det.innerHTML = `
-    <div class="metrics-grid mb12">
-      <div class="metric-card"><div class="metric-label">Presupuesto</div><div class="metric-val">$${d.presupuesto.toLocaleString('es-AR')}</div></div>
-      <div class="metric-card"><div class="metric-label">Ejecutado</div><div class="metric-val" style="color:var(--navy)">$${d.total_ejecutado.toLocaleString('es-AR')}</div><div class="metric-sub">${d.pct_ejecutado}%</div></div>
-      <div class="metric-card"><div class="metric-label">Disponible</div><div class="metric-val" style="color:${d.disponible<0?'var(--red)':'var(--green)'}">$${d.disponible.toLocaleString('es-AR')}</div></div>
-    </div>
-    <div class="card mb12">
-      <div class="bold small mb8">Progreso del presupuesto</div>
-      <div class="progress"><div class="progress-fill" style="width:${Math.min(d.pct_ejecutado,100)}%;background:${d.pct_ejecutado>90?'var(--red)':d.pct_ejecutado>70?'var(--amber)':'var(--navy)'}"></div></div>
-      <div class="flex justify-between xsmall text2 mt4"><span>${d.pct_ejecutado}% ejecutado</span><span>${100-d.pct_ejecutado}% disponible</span></div>
-      <div class="divider"></div>
-      ${Object.entries(d.por_categoria).map(([cat,monto])=>`
-      <div class="flex justify-between small" style="padding:4px 0">
-        <span>${cat}</span><span class="semi">$${monto.toLocaleString('es-AR')}</span>
-      </div>`).join("")}
-    </div>
-    <div class="flex justify-between items-center mb8">
-      <div class="bold small">Movimientos (${d.costos.length})</div>
-      ${["Dirección","Operaciones","Contabilidad"].includes(USER.area)?
-        `<button class="btn btn-primary btn-sm" onclick="modalNuevoCosto('${obraId}')">+ Agregar</button>`:""}
-    </div>
-    <div class="table-wrap"><table>
-      <tr><th>Fecha</th><th>Categoría</th><th>Concepto</th><th>Monto</th><th>Estado</th></tr>
-      ${d.costos.map(c=>`<tr>
-        <td class="xsmall">${c.fecha}</td>
-        <td><span class="badge badge-gray">${c.categoria}</span></td>
-        <td>${c.concepto}</td>
-        <td class="semi">$${parseFloat(c.monto||0).toLocaleString('es-AR')}</td>
-        <td><span class="badge ${c.estado==='Aprobado'||c.estado==='Pagado'?'badge-green':c.estado==='Pendiente'?'badge-amber':'badge-gray'}">${c.estado}</span></td>
-      </tr>`).join("")}
-    </table></div>`;
-}
-
-async function modalNuevoCosto(obraId) {
-  openModal(`
-    <div class="modal-title">💰 Registrar costo — ${obraId}</div>
-    <div class="form-group"><label class="label">Categoría</label>
-      <select class="select" id="ct-cat"><option>Materiales</option><option>Mano de obra</option><option>Viáticos</option><option>Equipos</option><option>Logística</option><option>Legal</option><option>Otros</option></select>
-    </div>
-    <div class="form-group"><label class="label">Concepto *</label><input class="input" id="ct-concepto" placeholder="Descripción del gasto"></div>
-    <div class="form-group"><label class="label">Monto ($) *</label><input class="input" id="ct-monto" type="number" placeholder="0"></div>
-    <div class="form-group"><label class="label">N° Factura / remito</label><input class="input" id="ct-ref" placeholder="FAC-2024-0089"></div>
-    <button class="btn btn-primary btn-block mt8" onclick="confirmarCosto('${obraId}')">✓ Registrar</button>
-    <button class="btn btn-outline btn-block mt8" onclick="closeModal()">Cancelar</button>
-  `);
-}
-
-async function confirmarCosto(obraId) {
-  const data = {
-    obra_id: obraId,
-    categoria: document.getElementById("ct-cat").value,
-    concepto: document.getElementById("ct-concepto").value.trim(),
-    monto: document.getElementById("ct-monto").value,
-    referencia: document.getElementById("ct-ref").value.trim(),
-  };
-  if (!data.concepto || !data.monto) { toast("Concepto y monto son obligatorios"); return; }
-  try {
-    await api("addCosto", {}, data);
-    closeModal();
-    toast("✓ Costo registrado");
-    cargarCostosObra(obraId);
-  } catch(e) { toast("Error: "+e.message); }
-}
-
-// ═══════════════════════════════════════════════════════════
-// TÉCNICOS
-// ═══════════════════════════════════════════════════════════
-
-async function renderTecnicos(el) {
-  const d = await api("getTecnicos");
-  const puedeAsignar = ["Dirección","Operaciones"].includes(USER.area);
-  el.innerHTML = `
-    <div class="metrics-grid mb12">
-      <div class="metric-card"><div class="metric-label">Disponibles</div><div class="metric-val" style="color:var(--green)">${d.disponibles}</div></div>
-      <div class="metric-card"><div class="metric-label">En obra</div><div class="metric-val" style="color:var(--navy)">${d.en_obra}</div></div>
-      <div class="metric-card"><div class="metric-label">De viaje</div><div class="metric-val" style="color:var(--amber)">${d.de_viaje}</div></div>
-    </div>
-    ${d.tecnicos.map(t => `
-    <div class="inv-card">
-      <div class="flex justify-between items-center">
-        <div>
-          <div class="bold">${t.nombre}</div>
-          <div class="small text2">${t.ubicacion||'—'}</div>
-        </div>
-        <span class="badge ${t.estado==='Disponible'?'badge-green':t.estado==='En obra'?'badge-blue':'badge-amber'}">${t.estado}</span>
-      </div>
-      ${t.obra_actual?`<div class="small text2 mt4">Obra: ${t.obra_actual}</div>`:''}
-      ${t.hotel_reservado?`<div class="small text2">Hotel: ${t.hotel_reservado} · Regresa: ${t.fecha_regreso}</div>`:''}
-      ${t.viaticos_asignados&&parseFloat(t.viaticos_asignados)>0?`<div class="small text2">Viáticos: $${parseFloat(t.viaticos_asignados).toLocaleString('es-AR')}</div>`:''}
-      ${puedeAsignar?`<button class="btn btn-outline btn-sm mt8" onclick="modalAsignarTecnico('${t.tecnico_id}','${t.nombre}')">Asignar</button>`:''}
-    </div>`).join("")}`;
-}
-
-async function modalAsignarTecnico(tecId, nombre) {
-  const obras = await api("getObras");
-  openModal(`
-    <div class="modal-title">👷 Asignar — ${nombre}</div>
-    <div class="form-group"><label class="label">Estado</label>
-      <select class="select" id="t-estado"><option>En obra</option><option>De viaje</option><option>Disponible</option></select>
-    </div>
-    <div class="form-group"><label class="label">Obra</label>
-      <select class="select" id="t-obra">
-        <option value="">Sin obra</option>
-        ${obras.obras.map(o=>`<option value="${o.obra_id}">${o.obra_id} — ${o.cliente}</option>`).join("")}
-      </select>
-    </div>
-    <div class="form-group"><label class="label">Viáticos ($)</label><input class="input" id="t-viat" type="number" placeholder="0"></div>
-    <div class="form-group"><label class="label">Hotel reservado</label><input class="input" id="t-hotel" placeholder="Nombre del hotel"></div>
-    <div class="form-row">
-      <div class="form-group"><label class="label">Fecha salida</label><input class="input" id="t-sal" type="date"></div>
-      <div class="form-group"><label class="label">Fecha regreso</label><input class="input" id="t-reg" type="date"></div>
-    </div>
-    <button class="btn btn-primary btn-block mt8" onclick="confirmarAsignacion('${tecId}')">✓ Asignar y notificar</button>
-    <button class="btn btn-outline btn-block mt8" onclick="closeModal()">Cancelar</button>
-  `);
-}
-
-async function confirmarAsignacion(tecId) {
-  const data = {
-    tecnico_id: tecId,
-    estado: document.getElementById("t-estado").value,
-    obra_id: document.getElementById("t-obra").value,
-    viaticos: document.getElementById("t-viat").value,
-    hotel: document.getElementById("t-hotel").value.trim(),
-    fecha_salida: document.getElementById("t-sal").value,
-    fecha_regreso: document.getElementById("t-reg").value,
-  };
-  try {
-    await api("asignarTecnico", {}, data);
-    closeModal();
-    toast("✓ Técnico asignado correctamente");
-    renderView("tecnicos");
-  } catch(e) { toast("Error: "+e.message); }
-}
-
-// ═══════════════════════════════════════════════════════════
-// MOVIMIENTOS
-// ═══════════════════════════════════════════════════════════
-
-async function renderMovimientos(el) {
-  const obras = await api("getObras");
-  el.innerHTML = `
-    <div class="form-group mb12">
-      <label class="label">Filtrar por obra</label>
-      <select class="select" id="sel-obra-mov" onchange="cargarMovimientos(this.value)">
-        <option value="">Todos los movimientos</option>
-        ${obras.obras.map(o=>`<option value="${o.obra_id}">${o.obra_id} — ${o.cliente}</option>`).join("")}
-      </select>
-    </div>
-    <div id="movimientos-tabla"><div class="spinner"></div></div>`;
-  cargarMovimientos("");
-}
-
-async function cargarMovimientos(obraId) {
-  const params = obraId ? { obra_id: obraId } : {};
-  const d = await api("getMovimientos", params);
-  const t = document.getElementById("movimientos-tabla");
-  t.innerHTML = `
-    <div class="bold small mb8">${d.total} movimientos</div>
-    <div class="table-wrap"><table>
-      <tr><th>Fecha</th><th>Tipo</th><th>Ítem</th><th>Cant.</th><th>Obra</th><th>Responsable</th><th>Doc.</th></tr>
-      ${d.movimientos.map(m=>`<tr>
-        <td class="xsmall">${m.fecha}</td>
-        <td><span class="badge ${m.tipo_mov==='Retiro'?'badge-blue':m.tipo_mov==='Devolucion'?'badge-green':m.tipo_mov==='Ingreso_compra'?'badge-teal':'badge-red'}">${m.tipo_mov}</span></td>
-        <td class="small">${m.item_id}</td>
-        <td>${m.cantidad}</td>
-        <td>${m.obra_id||'—'}</td>
-        <td class="small">${m.responsable}</td>
-        <td class="xsmall text2">${m.formulario_ref||'—'}</td>
-      </tr>`).join("")}
-    </table></div>`;
-}
-
-// ═══════════════════════════════════════════════════════════
-// TRAZABILIDAD
-// ═══════════════════════════════════════════════════════════
-
-async function renderTrazabilidad(el) {
-  const d = await api("getTrazabilidad");
-  el.innerHTML = `
-    <div class="bold mb12">${d.total} eventos registrados</div>
-    <div class="table-wrap"><table>
-      <tr><th>Fecha/Hora</th><th>Obra</th><th>Usuario</th><th>Evento</th><th>Detalle</th><th>Doc.</th></tr>
-      ${d.eventos.map(e=>`<tr>
-        <td class="xsmall">${e.timestamp}</td>
-        <td>${e.obra_id||'—'}</td>
-        <td class="small">${e.user_id||'—'}</td>
-        <td><span class="badge badge-blue">${e.evento}</span></td>
-        <td class="small">${e.detalle}</td>
-        <td class="xsmall text2">${e.documento_ref||'—'}</td>
-      </tr>`).join("")}
-    </table></div>`;
-}
-
-// ═══════════════════════════════════════════════════════════
-// USUARIOS
-// ═══════════════════════════════════════════════════════════
-
-async function renderUsuarios(el) {
-  const d = await api("getUsuarios");
-  el.innerHTML = `
-    <div class="bold mb12">${d.usuarios.length} usuarios</div>
-    <div class="table-wrap"><table>
-      <tr><th>ID</th><th>Nombre</th><th>Email</th><th>Área</th><th>Rol</th><th>Estado</th></tr>
-      ${d.usuarios.map(u=>`<tr>
-        <td class="xsmall">${u.user_id}</td>
-        <td class="semi">${u.nombre}</td>
-        <td class="small">${u.email}</td>
-        <td><span class="badge badge-blue">${u.area}</span></td>
-        <td class="small">${u.rol}</td>
-        <td><span class="badge ${u.activo==='TRUE'?'badge-green':'badge-red'}">${u.activo==='TRUE'?'Activo':'Inactivo'}</span></td>
-      </tr>`).join("")}
-    </table></div>`;
-}
-
-// ═══════════════════════════════════════════════════════════
-// MIS TAREAS (vista técnico)
-// ═══════════════════════════════════════════════════════════
-
-async function renderMisTareas(el) {
-  const obras = await api("getObras");
-  const inv   = await api("getInventario");
-  el.innerHTML = `
-    <div class="alert alert-blue mb12">Hola ${USER.nombre} — estas son tus obras y materiales asignados.</div>
-    <div class="bold mb8">Mis obras (${obras.total})</div>
-    ${obras.obras.map(o=>`
-    <div class="obra-card">
-      <div class="bold">${o.obra_id} — ${o.cliente}</div>
-      <div class="small text2">${o.nombre_obra}</div>
-      <span class="badge ${estadoBadge(o.estado)} mt4">${o.estado}</span>
-    </div>`).join("")}
-    <div class="divider"></div>
-    <div class="bold mb8">Solicitar material</div>
-    <button class="btn btn-primary btn-block" onclick="modalEgreso()">Solicitar retiro de material</button>`;
-}
-
-// ═══════════════════════════════════════════════════════════
-// MODAL / TOAST / SIDEBAR
-// ═══════════════════════════════════════════════════════════
-
-function openModal(html) {
-  document.getElementById("modal-body").innerHTML = html;
-  document.getElementById("modal-backdrop").classList.remove("hidden");
-}
-
-function closeModal() {
-  document.getElementById("modal-backdrop").classList.add("hidden");
-}
-
-document.getElementById("modal-backdrop").addEventListener("click", function(e) {
-  if (e.target === this) closeModal();
-});
-
-let toastTimer;
-function toast(msg) {
-  const el = document.getElementById("toast");
-  el.textContent = msg;
-  el.style.opacity = "1";
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => el.style.opacity = "0", 3000);
-}
-
-function toggleSidebar() {
-  document.getElementById("sidebar").classList.toggle("open");
-  document.getElementById("sidebar-overlay").classList.toggle("open");
-}
-
-function closeSidebar() {
-  document.getElementById("sidebar").classList.remove("open");
-  document.getElementById("sidebar-overlay").classList.remove("open");
-}
-
-// Enter en login
-document.getElementById("login-pass").addEventListener("keydown", e => {
-  if (e.key === "Enter") doLogin();
-});
-
-// ═══════════════════════════════════════════════════════════
-// AUTO LOGIN si hay sesión guardada
-// ═══════════════════════════════════════════════════════════
-window.addEventListener("load", () => {
-  const savedToken = localStorage.getItem("fibracor_token");
-  const savedUser  = localStorage.getItem("fibracor_user");
-  if (savedToken && savedUser) {
-    TOKEN = savedToken;
-    USER  = JSON.parse(savedUser);
-    initApp();
+    if (d.obras) {
+      html += '<div class="grid2 mb12">';
+      html += metricCard('Obras activas', d.obras.activas, 'var(--navy)', d.obras.total+' en total');
+      html += metricCard('Para cierre', d.obras.para_cierre, 'var(--amber)', d.obras.pend_oio+' pend. OIO');
+      html += '</div>';
+    }
+    if (d.inventario) {
+      html += '<div class="grid2 mb12">';
+      html += metricCard('Ítems en stock', d.inventario.total_items, 'var(--teal)', 'en depósito');
+      html += metricCard('Stock crítico', d.inventario.criticos, 'var(--red)', 'bajo mínimo');
+      html += '</div>';
+    }
+    if (d.inventario?.criticos>0) {
+      html += `<div class="alert alert-danger">⚠ <strong>${d.inventario.criticos} ítems bajo stock mínimo</strong><br>
+        ${(d.inventario.criticos_lista||[]).slice(0,3).map(i=>
+          `· ${i.descripcion}: ${i.disponible} disponible (mín: ${i.minimo})`).join('<br>')}
+      </div>`;
+    }
+    if (d.compras?.pendientes_aprobacion>0 && u.puede?.aprobar_compras) {
+      html += `<div class="alert alert-warning">🛒 <strong>${d.compras.pendientes_aprobacion} compras pendientes de aprobación</strong></div>`;
+    }
+    if (d.tecnicos && u.modulos?.includes('tecnicos')) {
+      html += `<div class="card"><div class="card-title">👷 Técnicos</div>
+        <div class="grid3">
+          ${statBox(d.tecnicos.disponibles,'Disponibles','var(--green)')}
+          ${statBox(d.tecnicos.en_obra,'En obra','var(--navy)')}
+          ${statBox(d.tecnicos.de_viaje,'De viaje','var(--amber)')}
+        </div></div>`;
+    }
+    if (d.ultimos_eventos?.length) {
+      html += `<div class="card"><div class="card-title">📜 Actividad reciente</div>`;
+      d.ultimos_eventos.forEach(ev => {
+        html += `<div style="padding:7px 0;border-bottom:1px solid var(--border);">
+          <div class="flex between"><span class="small bold">${ev.evento||''}</span><span class="small muted">${ev.timestamp||''}</span></div>
+          <div class="small muted">${ev.detalle||''}</div>
+        </div>`;
+      });
+      html += '</div>';
+    }
+    el.innerHTML = html;
+  } catch(e) {
+    el.innerHTML = `<div class="alert alert-danger"><strong>Error al conectar:</strong><br>${e.message}<br><br>
+      <button class="btn btn-primary btn-sm" onclick="cargarDashboard()">Reintentar</button></div>`;
   }
-});
+}
+
+function metricCard(label, val, color, sub) {
+  return `<div class="metric-card"><div class="metric-label">${label}</div>
+    <div class="metric-value" style="color:${color};">${val}</div>
+    <div class="metric-sub muted">${sub}</div></div>`;
+}
+function statBox(val, label, color) {
+  return `<div style="text-align:center;padding:8px 0;">
+    <div style="font-size:22px;font-weight:700;color:${color};">${val}</div>
+    <div class="small muted">${label}</div></div>`;
+}
+
+// ══════════════════════════════════════════════
+// OBRAS
+// ══════════════════════════════════════════════
+async function cargarObras() {
+  const el = document.getElementById('obras-list');
+  el.innerHTML = '<div class="loader"><div class="spinner"></div>Cargando obras...</div>';
+  try {
+    const d = await api('getObras');
+    S.obras = d.obras||[];
+    renderObras();
+  } catch(e) { el.innerHTML = `<div class="alert alert-danger">${e.message}</div>`; }
+}
+
+function renderObras() {
+  const el = document.getElementById('obras-list');
+  const lista = S.filtroObras ? S.obras.filter(o=>o.estado===S.filtroObras) : S.obras;
+  if (!lista.length) { el.innerHTML='<div class="muted" style="text-align:center;padding:32px;">Sin obras</div>'; return; }
+  const ec = {'En ejecución':'badge-green','Pendiente OIO':'badge-amber','Para cierre':'badge-blue','Cerrada':'badge-gray','Planificación':'badge-purple'};
+  el.innerHTML = lista.map(o => {
+    const pct = o.presupuesto>0 ? Math.min(100,Math.round((parseFloat(o.ejecutado)||0)/parseFloat(o.presupuesto)*100)) : 0;
+    return `<div class="list-item" onclick="verObra('${o.obra_id}')">
+      <div class="flex between mb4">
+        <span class="bold">${o.obra_id} — ${o.cliente||''}</span>
+        <span class="badge ${ec[o.estado]||'badge-gray'}">${o.estado||''}</span>
+      </div>
+      <div class="small muted mb4">${o.nombre_obra||''}</div>
+      <div class="flex between small muted">
+        <span>👷 ${o.jefe_obra||'Sin asignar'}</span>
+        <span>Etapa ${o.etapa_actual||0}/8</span>
+      </div>
+      ${o.presupuesto ? `<div class="progress mt8"><div class="progress-bar" style="width:${pct}%;background:var(--navy);"></div></div>
+        <div class="small muted" style="text-align:right;margin-top:2px;">${pct}% ejecutado</div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+function filtrarObras(el,estado) {
+  document.querySelectorAll('#obras-chips .chip').forEach(c=>c.classList.remove('active'));
+  el.classList.add('active'); S.filtroObras=estado; renderObras();
+}
+
+async function verObra(obraId) {
+  mostrarModal('<div class="loader"><div class="spinner"></div>Cargando...</div>');
+  try {
+    const d = await api('getObraDetalle',{obra_id:obraId});
+    const o = d.obra;
+    const ec = {'En ejecución':'badge-green','Pendiente OIO':'badge-amber','Para cierre':'badge-blue','Cerrada':'badge-gray'};
+    let html = `<span class="modal-close" onclick="cerrarModal()">✕</span>
+      <div class="modal-title">${o.obra_id} — ${o.cliente}</div>
+      <div class="flex gap8 mb12 wrap">
+        <span class="badge ${ec[o.estado]||'badge-gray'}">${o.estado}</span>
+        <span class="badge badge-blue">Etapa ${o.etapa_actual}/8</span>
+      </div>
+      <div class="card">
+        <div class="small"><strong>Alcance:</strong> ${o.alcance_tecnico||'—'}</div>
+        <div class="small mt8"><strong>Inicio:</strong> ${o.fecha_inicio_est||'—'} &nbsp;<strong>Fin:</strong> ${o.fecha_fin_est||'—'}</div>
+        <div class="small mt8"><strong>Jefe:</strong> ${o.jefe_obra||'—'}</div>
+      </div>`;
+    if (d.costos?.length) {
+      const total=d.costos.reduce((s,c)=>s+(parseFloat(c.monto)||0),0);
+      const pres=parseFloat(o.presupuesto)||0;
+      const pct=pres>0?Math.round(total/pres*100):0;
+      html+=`<div class="card"><div class="card-title">💰 Costos</div>
+        <div class="flex between small mb4"><span>Presupuesto</span><span class="bold">$${pres.toLocaleString('es-AR')}</span></div>
+        <div class="flex between small mb8"><span>Ejecutado</span><span class="bold" style="color:var(--amber);">$${total.toLocaleString('es-AR')}</span></div>
+        <div class="progress"><div class="progress-bar" style="width:${pct}%;background:var(--navy);"></div></div>
+        <div class="small muted" style="text-align:right;margin-top:2px;">${pct}%</div></div>`;
+    }
+    if (d.recursos?.length) {
+      html+=`<div class="card"><div class="card-title">📦 Recursos</div>`;
+      const rc={'Disponible':'badge-green','Parcial':'badge-amber','Sin stock':'badge-red'};
+      d.recursos.forEach(r=>{
+        html+=`<div class="flex between small" style="padding:5px 0;border-bottom:1px solid var(--border);">
+          <span>${r.descripcion||r.item_id}</span>
+          <span class="badge ${rc[r.estado_stock]||'badge-gray'}">${r.cantidad_planificada} ${r.unidad}</span></div>`;
+      });
+      html+='</div>';
+    }
+    mostrarModal(html);
+  } catch(e) {
+    mostrarModal(`<span class="modal-close" onclick="cerrarModal()">✕</span><div class="alert alert-danger">${e.message}</div>`);
+  }
+}
+
+function abrirModalObra() {
+  mostrarModal(`<span class="modal-close" onclick="cerrarModal()">✕</span>
+    <div class="modal-title">Nueva Orden de Inicio de Obra</div>
+    <div class="form-group"><label>Código de obra</label><input class="input" id="f-obra-id" placeholder="Ej: NH-02"></div>
+    <div class="form-group"><label>Cliente *</label><input class="input" id="f-cliente"></div>
+    <div class="form-group"><label>Nombre / descripción *</label><input class="input" id="f-nombre"></div>
+    <div class="form-group"><label>Sitio / dirección</label><input class="input" id="f-sitio"></div>
+    <div class="form-group"><label>Alcance técnico</label><textarea class="textarea" id="f-alcance"></textarea></div>
+    <div class="grid2">
+      <div class="form-group"><label>Fecha inicio</label><input class="input" type="date" id="f-inicio"></div>
+      <div class="form-group"><label>Fecha fin</label><input class="input" type="date" id="f-fin"></div>
+    </div>
+    <div class="form-group"><label>Presupuesto ($)</label><input class="input" type="number" id="f-presupuesto"></div>
+    <div class="form-group"><label>Jefe de obra</label><input class="input" id="f-jefe"></div>
+    <button class="btn btn-primary btn-block" onclick="guardarObra()">Emitir OIO</button>`);
+}
+
+async function guardarObra() {
+  const body = {
+    obra_id:v('f-obra-id'), cliente:v('f-cliente'), nombre_obra:v('f-nombre'),
+    sitio:v('f-sitio'), alcance_tecnico:v('f-alcance'),
+    fecha_inicio_est:v('f-inicio'), fecha_fin_est:v('f-fin'),
+    presupuesto:v('f-presupuesto'), jefe_obra:v('f-jefe'), emitida_por:S.user.nombre,
+  };
+  if (!body.cliente||!body.nombre_obra){toast('Completá cliente y nombre');return;}
+  try { await api('createObra',body); cerrarModal(); toast('✓ OIO creada'); cargarObras(); }
+  catch(e){toast('Error: '+e.message);}
+}
+
+// ══════════════════════════════════════════════
+// INVENTARIO
+// ══════════════════════════════════════════════
+async function cargarInventario() {
+  const el = document.getElementById('inventario-list');
+  el.innerHTML = '<div class="loader"><div class="spinner"></div>Cargando inventario...</div>';
+  try {
+    const d = await api('getInventario');
+    S.inventario = d.items||[];
+    renderInventario();
+  } catch(e) { el.innerHTML=`<div class="alert alert-danger">${e.message}</div>`; }
+}
+
+function renderInventario() {
+  const el = document.getElementById('inventario-list');
+  let lista = S.inventario;
+  if (S.filtroInv==='critico') lista=lista.filter(i=>i.alerta_critica);
+  else if (S.filtroInv) lista=lista.filter(i=>i.categoria===S.filtroInv);
+  if (!lista.length){el.innerHTML='<div class="muted" style="text-align:center;padding:32px;">Sin ítems</div>';return;}
+  el.innerHTML = lista.map(i => {
+    const total = (i.stock_disponible+i.stock_en_obra+i.stock_fuera_servicio)||1;
+    const pD=Math.round(i.stock_disponible/total*100);
+    const pO=Math.round(i.stock_en_obra/total*100);
+    const pF=Math.round(i.stock_fuera_servicio/total*100);
+    return `<div class="inv-item ${i.alerta_critica?'critico':'ok'}">
+      <div class="flex between mb4">
+        <span class="bold">${i.descripcion||i.item_id}</span>
+        <span class="badge ${i.alerta_critica?'badge-red':'badge-green'}">${i.alerta_critica?'⚠ Bajo stock':'✓ OK'}</span>
+      </div>
+      <span class="badge badge-gray small mb8">${i.categoria}</span>
+      <div class="flex gap12 small mb4" style="margin-top:6px;">
+        <span style="color:var(--green);">● ${i.stock_disponible} disp.</span>
+        <span style="color:var(--navy);">● ${i.stock_en_obra} en obra</span>
+        <span style="color:var(--red);">● ${i.stock_fuera_servicio} fuera serv.</span>
+      </div>
+      <div style="display:flex;height:6px;border-radius:3px;overflow:hidden;gap:1px;margin-top:4px;">
+        <div style="width:${pD}%;background:var(--green);"></div>
+        <div style="width:${pO}%;background:var(--navy);"></div>
+        <div style="width:${pF}%;background:var(--red);"></div>
+      </div>
+      ${i.stock_minimo>0?`<div class="small muted" style="margin-top:4px;">Mínimo: ${i.stock_minimo} ${i.unidad||''}</div>`:''}
+    </div>`;
+  }).join('');
+}
+
+function filtrarInventario(el,filtro) {
+  document.querySelectorAll('#mod-inventario .chip').forEach(c=>c.classList.remove('active'));
+  el.classList.add('active'); S.filtroInv=filtro; renderInventario();
+}
+
+function abrirModalMovimiento(tipo) {
+  const esIngreso = tipo==='ingreso';
+  const items = S.inventario.map(i=>`<option value="${i.item_id}">${i.descripcion} — Disp: ${i.stock_disponible}</option>`).join('');
+  const obras = S.obras.map(o=>`<option value="${o.obra_id}">${o.obra_id} — ${o.cliente}</option>`).join('');
+  mostrarModal(`<span class="modal-close" onclick="cerrarModal()">✕</span>
+    <div class="modal-title">${esIngreso?'+ Ingreso de mercadería':'− Egreso / Retiro'}</div>
+    <div class="form-group"><label>Ítem *</label>
+      <select class="select" id="m-item"><option value="">— elegir —</option>${items}</select></div>
+    <div class="form-group"><label>Cantidad *</label><input class="input" type="number" id="m-cant" min="1"></div>
+    ${!esIngreso?`
+    <div class="form-group"><label>Obra</label>
+      <select class="select" id="m-obra"><option value="">— sin obra —</option>${obras}</select></div>
+    <div class="form-group"><label>Tipo</label>
+      <select class="select" id="m-tipo">
+        <option value="Retiro">Retiro (F-02)</option>
+        <option value="Devolucion">Devolución (F-03)</option>
+        <option value="Baja">Baja</option>
+      </select></div>
+    <div class="form-group"><label>Estado herramienta</label>
+      <select class="select" id="m-estado-herr">
+        <option value="N/A">N/A</option><option value="OK">OK</option>
+        <option value="Con observaciones">Con observaciones</option>
+      </select></div>`:
+    `<div class="form-group"><label>Concepto / referencia</label><input class="input" id="m-concepto"></div>`}
+    <div class="form-group"><label>Observaciones</label><input class="input" id="m-obs"></div>
+    <button class="btn btn-primary btn-block" onclick="guardarMovimiento('${tipo}')">
+      ${esIngreso?'Registrar ingreso':'Registrar egreso'}</button>`);
+}
+
+async function guardarMovimiento(tipo) {
+  const itemId=v('m-item'), cantidad=v('m-cant');
+  if (!itemId||!cantidad){toast('Seleccioná ítem y cantidad');return;}
+  const params = tipo==='ingreso'
+    ? {action:'ingresarMercaderia',item_id:itemId,cantidad,concepto:v('m-concepto')||'',referencia:v('m-concepto')||''}
+    : {action:'egresarMercaderia',item_id:itemId,cantidad,obra_id:v('m-obra')||'',tipo_mov:v('m-tipo')||'Retiro',estado_herramienta:v('m-estado-herr')||'N/A',observaciones:v('m-obs')||''};
+  try {
+    await api(params.action, params);
+    cerrarModal(); toast('✓ Movimiento registrado'); cargarInventario();
+  } catch(e){toast('Error: '+e.message);}
+}
+
+// ══════════════════════════════════════════════
+// MOVIMIENTOS
+// ══════════════════════════════════════════════
+async function cargarMovimientos() {
+  const el = document.getElementById('movimientos-list');
+  el.innerHTML = '<div class="loader"><div class="spinner"></div>Cargando...</div>';
+  try {
+    const d = await api('getMovimientos');
+    const movs = (d.movimientos||[]).reverse().slice(0,50);
+    if (!movs.length){el.innerHTML='<div class="muted" style="text-align:center;padding:32px;">Sin movimientos</div>';return;}
+    const tc={'Retiro':'badge-amber','Devolucion':'badge-blue','Ingreso_compra':'badge-green','Baja':'badge-red'};
+    el.innerHTML=movs.map(m=>`<div class="list-item">
+      <div class="flex between mb4"><span class="bold">${m.mov_id}</span>
+        <span class="badge ${tc[m.tipo_mov]||'badge-gray'}">${m.tipo_mov}</span></div>
+      <div class="small muted mb4">${m.item_id} — ${m.cantidad} ud. · ${m.fecha||''}</div>
+      <div class="flex between small muted">
+        <span>👷 ${m.responsable||''}</span>
+        <span>${m.obra_id?'🏗 '+m.obra_id:''}</span>
+      </div></div>`).join('');
+  } catch(e){el.innerHTML=`<div class="alert alert-danger">${e.message}</div>`;}
+}
+
+// ══════════════════════════════════════════════
+// COMPRAS
+// ══════════════════════════════════════════════
+async function cargarCompras() {
+  const el = document.getElementById('compras-list');
+  el.innerHTML = '<div class="loader"><div class="spinner"></div>Cargando...</div>';
+  try {
+    const d = await api('getCompras');
+    const compras=d.compras||[];
+    if (!compras.length){el.innerHTML='<div class="muted" style="text-align:center;padding:32px;">Sin solicitudes</div>';return;}
+    const pc={'Urgente':'badge-red','Alta':'badge-amber','Media':'badge-blue','Normal':'badge-gray'};
+    const ec={'Solicitado':'badge-amber','Aprobado':'badge-green','En gestión':'badge-blue','Recibido':'badge-gray'};
+    el.innerHTML=compras.map(c=>`<div class="list-item">
+      <div class="flex between mb4"><span class="bold">${c.compra_id}</span>
+        <span class="badge ${ec[c.estado]||'badge-gray'}">${c.estado}</span></div>
+      <div class="small mb4">${c.descripcion||c.item_id}</div>
+      <div class="flex gap8 small muted wrap">
+        <span>🏗 ${c.obra_id||'—'}</span>
+        <span>📦 ${c.cantidad_faltante} ${c.unidad||''}</span>
+        <span class="badge ${pc[c.prioridad]||'badge-gray'}">${c.prioridad||''}</span>
+      </div>
+      ${S.user.puede?.aprobar_compras&&c.estado==='Solicitado'?
+        `<button class="btn btn-success btn-sm mt8" onclick="aprobarCompra('${c.compra_id}')">✓ Aprobar</button>`:''}
+    </div>`).join('');
+  } catch(e){el.innerHTML=`<div class="alert alert-danger">${e.message}</div>`;}
+}
+
+async function aprobarCompra(id) {
+  try { await api('aprobarCompra',{compra_id:id}); toast('✓ Aprobada'); cargarCompras(); }
+  catch(e){toast('Error: '+e.message);}
+}
+
+function abrirModalCompra() {
+  const items=S.inventario.map(i=>`<option value="${i.item_id}">${i.descripcion}</option>`).join('');
+  const obras=S.obras.map(o=>`<option value="${o.obra_id}">${o.obra_id} — ${o.cliente}</option>`).join('');
+  mostrarModal(`<span class="modal-close" onclick="cerrarModal()">✕</span>
+    <div class="modal-title">Nueva solicitud de compra</div>
+    <div class="form-group"><label>Obra *</label>
+      <select class="select" id="c-obra"><option value="">—</option>${obras}</select></div>
+    <div class="form-group"><label>Ítem *</label>
+      <select class="select" id="c-item"><option value="">—</option>${items}</select></div>
+    <div class="form-group"><label>Descripción</label><input class="input" id="c-desc"></div>
+    <div class="grid2">
+      <div class="form-group"><label>Cantidad *</label><input class="input" type="number" id="c-cant"></div>
+      <div class="form-group"><label>Unidad</label><input class="input" id="c-unidad" placeholder="m, ud."></div>
+    </div>
+    <div class="form-group"><label>Prioridad</label>
+      <select class="select" id="c-prio"><option>Normal</option><option>Media</option><option>Alta</option><option>Urgente</option></select></div>
+    <button class="btn btn-primary btn-block" onclick="guardarCompra()">Enviar solicitud</button>`);
+}
+
+async function guardarCompra() {
+  const body={obra_id:v('c-obra'),item_id:v('c-item'),descripcion:v('c-desc'),cantidad_faltante:v('c-cant'),unidad:v('c-unidad'),prioridad:v('c-prio')};
+  if (!body.item_id||!body.cantidad_faltante){toast('Completá ítem y cantidad');return;}
+  try { await api('createCompra',body); cerrarModal(); toast('✓ Solicitud enviada'); cargarCompras(); }
+  catch(e){toast('Error: '+e.message);}
+}
+
+// ══════════════════════════════════════════════
+// COSTOS
+// ══════════════════════════════════════════════
+async function cargarSelectObras() {
+  if (!S.obras.length) { try{const d=await api('getObras');S.obras=d.obras||[];}catch(e){} }
+  const sel=document.getElementById('costos-obra-sel');
+  sel.innerHTML='<option value="">— elegir obra —</option>'+S.obras.map(o=>`<option value="${o.obra_id}">${o.obra_id} — ${o.cliente}</option>`).join('');
+}
+
+async function cargarCostos(obraId) {
+  if (!obraId) return;
+  const el=document.getElementById('costos-content');
+  el.innerHTML='<div class="loader"><div class="spinner"></div>Cargando...</div>';
+  try {
+    const d=await api('getCostos',{obra_id:obraId});
+    const cc={'Materiales':'badge-blue','Mano de obra':'badge-teal','Viáticos':'badge-amber','Equipos':'badge-purple','Otros':'badge-gray'};
+    el.innerHTML=`<div class="grid2 mb12">
+      ${metricCard('Presupuesto','$'+(d.presupuesto||0).toLocaleString('es-AR'),'var(--navy)','')}
+      ${metricCard('Ejecutado','$'+(d.total_ejecutado||0).toLocaleString('es-AR'),'var(--amber)',(d.pct_ejecutado||0)+'%')}
+    </div>
+    <div class="progress mb12" style="height:10px;">
+      <div class="progress-bar" style="width:${d.pct_ejecutado||0}%;background:var(--navy);"></div>
+    </div>
+    <div class="card"><div class="card-title">Movimientos</div>
+      ${(d.costos||[]).map(c=>`<div style="padding:8px 0;border-bottom:1px solid var(--border);">
+        <div class="flex between mb4">
+          <span class="bold small">${c.concepto||''}</span>
+          <span class="bold small">$${(parseFloat(c.monto)||0).toLocaleString('es-AR')}</span>
+        </div>
+        <div class="flex gap8 small muted">
+          <span class="badge ${cc[c.categoria]||'badge-gray'}">${c.categoria||''}</span>
+          <span>${c.fecha||''}</span>
+        </div></div>`).join('')}
+    </div>`;
+  } catch(e){el.innerHTML=`<div class="alert alert-danger">${e.message}</div>`;}
+}
+
+// ══════════════════════════════════════════════
+// TÉCNICOS
+// ══════════════════════════════════════════════
+async function cargarTecnicos() {
+  const el=document.getElementById('tecnicos-list');
+  el.innerHTML='<div class="loader"><div class="spinner"></div>Cargando...</div>';
+  try {
+    const d=await api('getTecnicos');
+    const ec={'Disponible':'badge-green','En obra':'badge-amber','De viaje':'badge-blue'};
+    el.innerHTML=`<div class="grid3 mb12">
+      ${metricCard('Disponibles',d.disponibles,'var(--green)','')}
+      ${metricCard('En obra',d.en_obra,'var(--amber)','')}
+      ${metricCard('De viaje',d.de_viaje,'var(--navy)','')}
+    </div>
+    ${(d.tecnicos||[]).map(t=>`<div class="list-item">
+      <div class="flex between mb4"><span class="bold">${t.nombre||t.tecnico_id}</span>
+        <span class="badge ${ec[t.estado]||'badge-gray'}">${t.estado||''}</span></div>
+      <div class="small muted">${t.obra_actual?'🏗 '+t.obra_actual:'📍 '+t.ubicacion}</div>
+      ${t.viaticos_asignados>0?`<div class="small muted mt4">✈ Viáticos: $${parseFloat(t.viaticos_asignados).toLocaleString('es-AR')} · ${t.hotel_reservado||''}</div>`:''}
+    </div>`).join('')}`;
+  } catch(e){el.innerHTML=`<div class="alert alert-danger">${e.message}</div>`;}
+}
+
+// ══════════════════════════════════════════════
+// MIS TAREAS
+// ══════════════════════════════════════════════
+async function cargarMisTareas() {
+  const el=document.getElementById('mistareas-content');
+  el.innerHTML='<div class="loader"><div class="spinner"></div>Cargando...</div>';
+  try {
+    const [dO,dM]=await Promise.all([api('getObras'),api('getMovimientos')]);
+    const misObras=dO.obras||[];
+    const misMovs=(dM.movimientos||[]).filter(m=>m.responsable===S.user.nombre).slice(0,10);
+    let html='';
+    if (misObras.length) {
+      html+='<div class="card"><div class="card-title">🏗 Mis obras</div>';
+      misObras.forEach(o=>{
+        html+=`<div style="padding:7px 0;border-bottom:1px solid var(--border);">
+          <div class="flex between"><span class="bold small">${o.obra_id} — ${o.cliente}</span>
+          <span class="badge ${o.estado==='En ejecución'?'badge-green':'badge-amber'}">${o.estado}</span></div>
+          <div class="small muted">${o.nombre_obra}</div></div>`;
+      });
+      html+='</div>';
+    } else { html+='<div class="alert alert-info">No tenés obras asignadas actualmente.</div>'; }
+    if (misMovs.length) {
+      html+='<div class="card"><div class="card-title">🔄 Mis movimientos recientes</div>';
+      misMovs.forEach(m=>{
+        html+=`<div style="padding:6px 0;border-bottom:1px solid var(--border);">
+          <div class="flex between small"><span>${m.tipo_mov} — ${m.item_id}</span><span class="muted">${m.fecha}</span></div>
+          <div class="small muted">${m.cantidad} ud. · ${m.obra_id||'sin obra'}</div></div>`;
+      });
+      html+='</div>';
+    }
+    el.innerHTML=html||'<div class="muted" style="text-align:center;padding:32px;">Sin actividad reciente</div>';
+  } catch(e){el.innerHTML=`<div class="alert alert-danger">${e.message}</div>`;}
+}
+
+// ══════════════════════════════════════════════
+// TRAZABILIDAD
+// ══════════════════════════════════════════════
+async function cargarTrazabilidad() {
+  const el=document.getElementById('traza-list');
+  el.innerHTML='<div class="loader"><div class="spinner"></div>Cargando...</div>';
+  try {
+    const d=await api('getTrazabilidad');
+    const logs=d.eventos||[];
+    if (!logs.length){el.innerHTML='<div class="muted" style="text-align:center;padding:32px;">Sin eventos</div>';return;}
+    const ec={'OIO_emitida':'badge-blue','Movimiento_Retiro':'badge-amber','Movimiento_Devolucion':'badge-teal',
+      'Compra_solicitada':'badge-purple','Compra_aprobada':'badge-green','Cierre_F04':'badge-gray','Alerta_stock_critico':'badge-red'};
+    el.innerHTML=logs.map(l=>`<div class="list-item">
+      <div class="flex between mb4">
+        <span class="badge ${ec[l.evento]||'badge-gray'}">${l.evento||''}</span>
+        <span class="small muted">${l.timestamp||''}</span>
+      </div>
+      <div class="small mb4">${l.detalle||''}</div>
+      <div class="flex gap8 small muted">
+        ${l.obra_id?`<span>🏗 ${l.obra_id}</span>`:''}
+        ${l.documento_ref?`<span>📄 ${l.documento_ref}</span>`:''}
+      </div></div>`).join('');
+  } catch(e){el.innerHTML=`<div class="alert alert-danger">${e.message}</div>`;}
+}
+
+// ══════════════════════════════════════════════
+// MODAL / TOAST / UTILS
+// ══════════════════════════════════════════════
+function mostrarModal(html) {
+  document.getElementById('modal-content').innerHTML=html;
+  document.getElementById('modal-bg').classList.remove('hidden');
+}
+function cerrarModal() { document.getElementById('modal-bg').classList.add('hidden'); }
+function cerrarModalBg(e) { if(e.target===document.getElementById('modal-bg')) cerrarModal(); }
+
+let toastT;
+function toast(msg) {
+  const el=document.getElementById('toast');
+  el.textContent=msg; el.classList.add('show');
+  clearTimeout(toastT); toastT=setTimeout(()=>el.classList.remove('show'),3000);
+}
+
+function v(id) { return document.getElementById(id)?.value||''; }
+
+// ══════════════════════════════════════════════
+// INICIO — recuperar sesión
+// ══════════════════════════════════════════════
+(function(){
+  const token=localStorage.getItem('fc_token');
+  const user=localStorage.getItem('fc_user');
+  if (token&&user) {
+    try { S.token=token; S.user=JSON.parse(user); iniciarApp(); }
+    catch(e) { doLogout(); }
+  }
+})();
 </script>
 </body>
 </html>
