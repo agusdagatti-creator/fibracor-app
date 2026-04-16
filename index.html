@@ -155,7 +155,7 @@ tr:last-child td{border-bottom:none;}tr:hover td{background:rgba(255,255,255,.02
         <div class="flex between mb12">
           <div class="chips" id="och" style="margin-bottom:0;flex:1;">
             <button class="chip active" onclick="fObras(this,'')">Todas</button>
-            <button class="chip" onclick="fObras(this,'En ejecucion')">Activas</button>
+            <button class="chip" onclick="fObras(this,'En ejecución')">Activas</button>
             <button class="chip" onclick="fObras(this,'Pendiente OIO')">Pend. OIO</button>
             <button class="chip" onclick="fObras(this,'Para cierre')">Para cierre</button>
             <button class="chip" onclick="fObras(this,'Cerrada')">Cerradas</button>
@@ -347,8 +347,8 @@ function startApp(){
     t.onclick=()=>goMod(mod);nb.appendChild(t);
   });
   if(!u.puede?.ingresar_mercaderia)document.getElementById('btn-ing')?.classList.add('hidden');
-  if(!['Direccion','Operaciones','Paniol'].includes(u.area))document.getElementById('btn-ci')?.classList.add('hidden');
-  if(!['Direccion','Comercial'].includes(u.area))document.getElementById('btn-no')?.classList.add('hidden');
+  if(!['Dirección','Operaciones','Pañol'].includes(u.area))document.getElementById('btn-ci')?.classList.add('hidden');
+  if(!['Dirección','Comercial'].includes(u.area))document.getElementById('btn-no')?.classList.add('hidden');
   if(!u.puede?.crear_remito)document.getElementById('btn-rem')?.classList.add('hidden');
   goMod('dashboard');
 }
@@ -421,14 +421,14 @@ function fObras(el,e){
 }
 function renderObras(){
   const chip=document.querySelector('#och .chip.active')?.textContent?.trim();
-  const mapa={'Activas':'En ejecucion','Pend. OIO':'Pendiente OIO','Para cierre':'Para cierre','Cerradas':'Cerrada'};
+  const mapa={'Activas':'En ejecución','Pend. OIO':'Pendiente OIO','Para cierre':'Para cierre','Cerradas':'Cerrada'};
   const f=mapa[chip]||'';
   renderObrasI(f?S.obras.filter(o=>o.estado===f):S.obras);
 }
 function renderObrasI(lista){
   const el=document.getElementById('d-obras');
   if(!lista.length){el.innerHTML='<div class="loader" style="padding:40px;"><span class="mu">Sin obras</span></div>';return;}
-  const ec={'En ejecucion':'b-green','Pendiente OIO':'b-amber','Para cierre':'b-blue','Cerrada':'b-gray','Planificacion':'b-purple'};
+  const ec={'En ejecución':'b-green','Pendiente OIO':'b-amber','Para cierre':'b-blue','Cerrada':'b-gray','Planificación':'b-purple'};
   const pe=S.user.puede?.editar_obras,pEl=S.user.puede?.eliminar_obras;
   el.innerHTML=lista.map(o=>{
     const pct=parseFloat(o.presupuesto)>0?Math.min(100,Math.round((parseFloat(o.ejecutado)||0)/parseFloat(o.presupuesto)*100)):0;
@@ -442,7 +442,7 @@ function renderObrasI(lista){
       +'<div class="flex gap8 wrap">'
       +'<button class="btn btn-gh btn-xs" onclick="verObra(''+o.obra_id+'')">Ver</button>'
       +(pe?'<button class="btn btn-gh btn-xs" onclick="modalEditarObra(''+o.obra_id+'')">Editar</button>':'')
-      +(pe?'<button class="btn btn-gh btn-xs" onclick="modalCambiarTecnico(''+o.obra_id+'',''+(o.jefe_obra||'')+'')">Tecnico</button>':'')
+      +(pe?'<button class="btn btn-gh btn-xs" onclick="modalCambiarTecnico(''+o.obra_id+'',''+(o.jefe_obra||'')+'')">Técnico</button>':'')
       +(pe?'<button class="btn btn-gh btn-xs" onclick="modalCambiarEstado(''+o.obra_id+'',''+(o.estado||'')+'')">Estado</button>':'')
       +(pEl?'<button class="btn btn-xs" style="background:rgba(239,68,68,.1);color:#F87171;border:1px solid rgba(239,68,68,.2);" onclick="eliminarObra(''+o.obra_id+'')">Eliminar</button>':'')
       +'</div></div>';
@@ -452,7 +452,7 @@ async function verObra(id){
   showModal(ldr());
   try{
     const d=await api('getObraDetalle',{obra_id:id});const o=d.obra;
-    const ec={'En ejecucion':'b-green','Pendiente OIO':'b-amber','Para cierre':'b-blue','Cerrada':'b-gray'};
+    const ec={'En ejecución':'b-green','Pendiente OIO':'b-amber','Para cierre':'b-blue','Cerrada':'b-gray'};
     let rH='';
     if(d.reportes?.length){
       rH='<div class="card"><div class="ct">Reportes ('+d.reportes.length+')</div>';
@@ -520,7 +520,7 @@ async function saveEditarObra(id){
   catch(e){toast('Error: '+e.message);}
 }
 function modalCambiarEstado(id,ea){
-  const es=['Pendiente OIO','Planificacion','En ejecucion','Para cierre','Cerrada'];
+  const es=['Pendiente OIO','Planificación','En ejecución','Para cierre','Cerrada'];
   showModal('<button class="mo-x" onclick="closeModal()">X</button>'
     +'<div class="mo-t">Cambiar estado - '+id+'</div>'
     +'<div class="fg"><label>NUEVO ESTADO</label><select class="sel" id="ce-est">'+es.map(e=>'<option '+(e===ea?'selected':'')+'>'+e+'</option>').join('')+'</select></div>'
@@ -591,7 +591,7 @@ function renderInvI(lista){
       +(vP?'<div class="xs mu mb8">Costo: $'+(i.precio_costo||0).toLocaleString('es-AR')+' - Lista: $'+(i.precio_lista||0).toLocaleString('es-AR')+'</div>':'')
       +'<div class="flex gap8 wrap">'
       +'<button class="btn btn-gh btn-xs" onclick="verHistItem(''+i.item_id+'')">Historial</button>'
-      +(S.user.area!=='Tecnico'?'<button class="btn btn-gh btn-xs" onclick="modalAjuste(''+i.item_id+'','+i.stock_disponible+','+i.stock_fuera_servicio+','+i.stock_minimo+')">Ajustar</button>':'')
+      +(S.user.area!=='Técnico'?'<button class="btn btn-gh btn-xs" onclick="modalAjuste(''+i.item_id+'','+i.stock_disponible+','+i.stock_fuera_servicio+','+i.stock_minimo+')">Ajustar</button>':'')
       +(vP?'<button class="btn btn-gh btn-xs" onclick="modalPrecios(''+i.item_id+'','+(i.precio_costo||0)+','+(i.precio_lista||0)+')">Precios</button>':'')
       +'</div></div>';
   }).join('');
@@ -644,7 +644,7 @@ function modalIngreso(){
   const comprasAprobadas=S.compras.filter(c=>c.estado==='Aprobado');
   const ocHtml=comprasAprobadas.map(c=>'<option value="'+c.compra_id+'">'+c.compra_id+' - '+(c.descripcion||c.item_id)+'</option>').join('');
   const items=S.inv.map(i=>'<option value="'+i.item_id+'">'+i.descripcion+' ('+i.item_id+')</option>').join('');
-  const obras=S.obras.filter(o=>o.estado==='En ejecucion').map(o=>'<option value="'+o.obra_id+'">'+o.obra_id+' - '+o.cliente+'</option>').join('');
+  const obras=S.obras.filter(o=>o.estado==='En ejecución').map(o=>'<option value="'+o.obra_id+'">'+o.obra_id+' - '+o.cliente+'</option>').join('');
   showModal('<button class="mo-x" onclick="closeModal()">X</button>'
     +'<div class="mo-t">+ Ingreso de mercaderia</div>'
     +'<div class="fg"><label>TIPO DE INGRESO</label>'
@@ -920,7 +920,7 @@ async function verCliente(id){
       +'<div><div class="xs mu">Telefono</div><div class="sm">'+(c.telefono||'-')+'</div></div>'
       +'<div><div class="xs mu">Ciudad</div><div class="sm">'+(c.ciudad||'-')+'</div></div>'
       +'<div><div class="xs mu">CUIT</div><div class="sm">'+(c.cuit||'-')+'</div></div>'
-      +'<div><div class="xs mu">Direccion</div><div class="sm">'+(c.direccion||'-')+'</div></div>'
+      +'<div><div class="xs mu">Dirección</div><div class="sm">'+(c.direccion||'-')+'</div></div>'
       +'</div>'+(c.notas?'<div class="sm mt8 mu">'+c.notas+'</div>':'')
       +'<div class="flex gap8 mt12">'
       +'<button class="btn btn-p btn-sm" onclick="modalEditCliente(''+c.cliente_id+'')">Editar</button>'
@@ -928,7 +928,7 @@ async function verCliente(id){
       +'</div></div>';
     if(d.obras?.length){
       h+='<div class="card mb12"><div class="ct">Obras ('+d.obras.length+')</div>';
-      const ec={'En ejecucion':'b-green','Pendiente OIO':'b-amber','Para cierre':'b-blue','Cerrada':'b-gray'};
+      const ec={'En ejecución':'b-green','Pendiente OIO':'b-amber','Para cierre':'b-blue','Cerrada':'b-gray'};
       d.obras.forEach(o=>{
         h+='<div style="padding:8px 0;border-bottom:1px solid var(--border);">'
           +'<div class="flex between sm"><span class="bold">'+o.obra_id+' - '+o.nombre_obra+'</span><span class="badge '+(ec[o.estado]||'b-gray')+'">'+o.estado+'</span></div>'
@@ -1351,7 +1351,7 @@ async function loadCostos(obraId){
         +'</div>'
         +'<div class="pb mb12" style="height:6px;"><div class="pf" style="width:'+(d.pct_ejecutado||0)+'%;background:var(--accent);"></div></div>';
     } else { el.innerHTML=''; }
-    if(['Direccion','Operaciones','Contabilidad'].includes(S.user.area)){
+    if(['Dirección','Operaciones','Contabilidad'].includes(S.user.area)){
       el.innerHTML+='<div class="flex between mb12"><span class="sm mu">'+_costos.length+' registros</span><button class="btn btn-p btn-sm" onclick="modalAddCosto()">+ Agregar costo</button></div>';
     }
     el.innerHTML+='<div id="costos-lista"></div>';
@@ -1475,7 +1475,7 @@ async function atenderSolicitud(repId){
   catch(e){toast('Error: '+e.message);}
 }
 function modalAsignarTecnico(tecId){
-  const obras=S.obras.filter(o=>o.estado==='En ejecucion').map(o=>'<option value="'+o.obra_id+'">'+o.obra_id+' - '+o.cliente+'</option>').join('');
+  const obras=S.obras.filter(o=>o.estado==='En ejecución').map(o=>'<option value="'+o.obra_id+'">'+o.obra_id+' - '+o.cliente+'</option>').join('');
   showModal('<button class="mo-x" onclick="closeModal()">X</button>'
     +'<div class="mo-t">Asignar obra - Tecnico '+tecId+'</div>'
     +'<div class="fg"><label>ESTADO</label><select class="sel" id="at-est">'
@@ -1502,7 +1502,7 @@ async function loadMT(){
     if(misObras.length){
       h+='<div class="card mb12"><div class="ct">Mis obras asignadas</div>';
       misObras.forEach(o=>{
-        const ec={'En ejecucion':'b-green','Para cierre':'b-blue','Pendiente OIO':'b-amber'};
+        const ec={'En ejecución':'b-green','Para cierre':'b-blue','Pendiente OIO':'b-amber'};
         h+='<div style="padding:8px 0;border-bottom:1px solid var(--border);">'
           +'<div class="flex between sm mb4"><span class="bold">'+o.obra_id+' - '+o.cliente+'</span>'
           +'<span class="badge '+(ec[o.estado]||'b-gray')+'">'+o.estado+'</span></div>'
@@ -1570,7 +1570,7 @@ async function saveSolicitarMaterial(obraId){
   catch(e){toast('Error: '+e.message);}
 }
 function modalCambiarEstadoTecnico(obraId,ea){
-  const es=['En ejecucion','Para cierre'];
+  const es=['En ejecución','Para cierre'];
   showModal('<button class="mo-x" onclick="closeModal()">X</button>'
     +'<div class="mo-t">Actualizar estado - '+obraId+'</div>'
     +'<div class="al al-i">Como tecnico podes reportar el estado de tu obra.</div>'
@@ -1589,7 +1589,7 @@ async function loadUsuarios(){
   try{
     const d=await api('getUsuarios');const usu=d.usuarios||[];
     document.getElementById('usuarios-count').textContent=usu.length+' usuarios';
-    const ac={Direccion:'#60A5FA',Operaciones:'#22D3EE',Comercial:'#A78BFA',Tecnico:'#FBBF24',Paniol:'#F87171',Contabilidad:'#34D399'};
+    const ac={Dirección:'#60A5FA',Operaciones:'#22D3EE',Comercial:'#A78BFA',Técnico:'#FBBF24',Pañol:'#F87171',Contabilidad:'#34D399'};
     el.innerHTML=usu.map(u=>'<div class="ca" style="opacity:'+(u.activo?1:.5)+';">'
       +'<div class="flex gap12">'
       +'<div class="cav" style="background:rgba(59,130,246,.1);color:'+(ac[u.area]||'#94A3B8')+';"><b>'+u.nombre.charAt(0)+'</b></div>'
@@ -1604,7 +1604,7 @@ async function loadUsuarios(){
   }catch(e){el.innerHTML='<div class="al al-d">'+e.message+'</div>';}
 }
 function modalCrearUsuario(){
-  const areas=['Direccion','Operaciones','Comercial','Tecnico','Paniol','Contabilidad'];
+  const areas=['Dirección','Operaciones','Comercial','Técnico','Pañol','Contabilidad'];
   showModal('<button class="mo-x" onclick="closeModal()">X</button>'
     +'<div class="mo-t">Nuevo usuario</div>'
     +'<div class="fg"><label>NOMBRE *</label><input class="inp" id="nu-n"></div>'
@@ -1622,7 +1622,7 @@ async function saveNuevoUser(){
   catch(e){toast('Error: '+e.message);}
 }
 function modalEditUser(id,nombre,email,area,rol){
-  const areas=['Direccion','Operaciones','Comercial','Tecnico','Paniol','Contabilidad'];
+  const areas=['Dirección','Operaciones','Comercial','Técnico','Pañol','Contabilidad'];
   showModal('<button class="mo-x" onclick="closeModal()">X</button>'
     +'<div class="mo-t">Editar usuario</div>'
     +'<div class="fg"><label>NOMBRE</label><input class="inp" id="eu-n" value="'+nombre+'"></div>'
