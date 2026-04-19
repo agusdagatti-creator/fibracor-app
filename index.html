@@ -448,7 +448,9 @@ async function loadDash(){
         else if(oc.estado==="Rechazado")h+=`<div class="al al-d mb12">❌ <b>Tu OC ${oc.compra_id} fue rechazada</b>${oc.observaciones?" · Motivo: "+oc.observaciones:""}</div>`;
       });
     }
-    if(d.compras?.pendientes_aprobacion>0&&u.puede?.aprobar_oc)h+=`<div class="al al-i mb12">🛒 <b>${d.compras.pendientes_aprobacion} OCs esperan tu aprobación</b></div>`;
+    // Notificaciones de OCs: dirigidas al usuario específicamente
+    if(d.compras?.dirigidas_a_mi>0)h+=`<div class="al al-i mb12" style="border-left-color:#F59E0B;background:rgba(245,158,11,.1);cursor:pointer" onclick="goMod('compras')">🔔 <b>Tenés ${d.compras.dirigidas_a_mi} OC${d.compras.dirigidas_a_mi>1?"s":""} esperando tu aprobación</b> — hacé click para ver</div>`;
+    else if(d.compras?.pendientes_aprobacion>0&&u.puede?.aprobar_oc)h+=`<div class="al al-i mb12">🛒 <b>${d.compras.pendientes_aprobacion} OCs pendientes de aprobación</b></div>`;
     if(d.ultimos_eventos?.length){
       h+=`<div class="card"><div class="ct">📜 Actividad reciente</div>`;
       const ec={OIO_emitida:"b-blue",Movimiento_Retiro:"b-amber",Compra_aprobada:"b-green",Remito_creado:"b-teal",Reporte_tecnico:"b-purple",Solicitud_material:"b-amber",Alerta_stock_critico:"b-red"};
@@ -542,25 +544,61 @@ async function verObra(id){
   }catch(e){showModal(`<button class="mo-x" onclick="closeModal()">✕</button><div class="al al-d">${e.message}</div>`);}
 }
 
-function modalObra(){
-  const clis=S.clientes.map(c=>`<option value="${c.razon_social}">`).join("");
+async function modalObra(){
+  // Asegurar clientes y tecnicos cargados
+  if(!S.clientes.length){try{const d=await api("getClientes");S.clientes=d.clientes||[];}catch(e){}}
+  if(!S._tecnicos){try{const d=await api("getTecnicos");S._tecnicos=d.tecnicos||[];}catch(e){S._tecnicos=[];}}
+  const cliOpts=S.clientes.map(c=>`<option value="${c.razon_social}">${c.razon_social}${c.ciudad?" — "+c.ciudad:""}</option>`).join("");
+  const tecOpts=S._tecnicos.map(t=>`<option value="${t.nombre||t.tecnico_id}">${t.nombre||t.tecnico_id}</option>`).join("");
   showModal(`<button class="mo-x" onclick="closeModal()">✕</button>
     <div class="mo-t">Nueva Orden de Inicio de Obra</div>
-    <div class="g2f"><div class="fg"><label>CÓDIGO</label><input class="inp" id="f-oid" placeholder="NH-02"></div>
-    <div class="fg"><label>CLIENTE *</label><input class="inp" id="f-cli" list="cl-dl"><datalist id="cl-dl">${clis}</datalist></div></div>
+    <div class="g2f">
+      <div class="fg"><label>CÓDIGO</label><input class="inp" id="f-oid" placeholder="NH-02"></div>
+      <div class="fg"><label>CLIENTE *</label>
+        <select class="sel" id="f-cli-sel" onchange="el('f-cli').value=this.value">
+          <option value="">— elegir cliente —</option>${cliOpts}
+        </select>
+        <input class="inp" id="f-cli" placeholder="O escribir nombre del cliente..." style="margin-top:4px">
+      </div>
+    </div>
     <div class="fg"><label>NOMBRE *</label><input class="inp" id="f-nom"></div>
     <div class="fg"><label>SITIO</label><input class="inp" id="f-sit"></div>
-    <div class="fg"><label>ALCANCE</label><textarea class="ta" id="f-alc"></textarea></div>
-    <div class="g2f"><div class="fg"><label>INICIO</label><input class="inp" type="date" id="f-ini"></div>
-    <div class="fg"><label>FIN</label><input class="inp" type="date" id="f-fin"></div></div>
-    <div class="g2f"><div class="fg"><label>PRESUPUESTO ($)</label><input class="inp" type="number" id="f-pre"></div>
-    <div class="fg"><label>TÉCNICO</label><input class="inp" id="f-jef"></div></div>
+    <div class="fg"><label>ALCANCE TÉCNICO</label><textarea class="ta" id="f-alc"></textarea></div>
+    <div class="g2f">
+      <div class="fg"><label>INICIO</label><input class="inp" type="date" id="f-ini"></div>
+      <div class="fg"><label>FIN</label><input class="inp" type="date" id="f-fin"></div>
+    </div>
+    <div class="fg"><label>PRESUPUESTO ($)</label><input class="inp" type="number" id="f-pre"></div>
+    <div class="fg"><label>JEFE DE OBRA (técnico responsable)</label>
+      <select class="sel" id="f-jef">
+        <option value="">— sin asignar —</option>${tecOpts}
+      </select>
+    </div>
+    <div class="fg"><label>TÉCNICOS ADICIONALES (ctrl+click para varios)</label>
+      <select class="sel" id="f-tecs" multiple style="min-height:90px">
+        ${tecOpts}
+      </select>
+      <span class="xs mu" style="margin-top:3px">Mantené Ctrl (o Cmd en Mac) para seleccionar varios</span>
+    </div>
     <button class="btn btn-p btn-bl" onclick="saveObra()">Emitir OIO</button>`);
 }
 async function saveObra(){
-  const body={obra_id:g("f-oid"),cliente:g("f-cli"),nombre_obra:g("f-nom"),sitio:g("f-sit"),alcance_tecnico:g("f-alc"),fecha_inicio_est:g("f-ini"),fecha_fin_est:g("f-fin"),presupuesto:g("f-pre"),jefe_obra:g("f-jef"),emitida_por:S.user.nombre};
+  // Cliente: prioritize select, fallback to text input
+  const cliSel=el("f-cli-sel"),cliTxt=g("f-cli");
+  const cliente=cliSel?.value||cliTxt||"";
+  // Tecnicos adicionales: collect multi-select
+  const tecsSel=el("f-tecs");
+  const tecsAdicionales=tecsSel?Array.from(tecsSel.selectedOptions).map(o=>o.value).filter(v=>v):[];
+  const body={
+    obra_id:g("f-oid"),cliente,nombre_obra:g("f-nom"),sitio:g("f-sit"),
+    alcance_tecnico:g("f-alc"),fecha_inicio_est:g("f-ini"),fecha_fin_est:g("f-fin"),
+    presupuesto:g("f-pre"),jefe_obra:g("f-jef"),
+    tecnicos_asignados:JSON.stringify(tecsAdicionales),
+    emitida_por:S.user.nombre
+  };
   if(!body.cliente||!body.nombre_obra){toast("Completá cliente y nombre");return;}
-  try{await api("createObra",body);closeModal();toast("✓ OIO creada");loadObras();}catch(e){toast("Error: "+e.message);}
+  try{await api("createObra",body);closeModal();toast("✓ OIO creada");loadObras();}
+  catch(e){toast("Error: "+e.message);}
 }
 
 function modalEditarObra(o){
@@ -808,6 +846,8 @@ function renderComprasItems(lista){
     <div class="flex gap8 wrap">
       <button class="btn btn-gh btn-xs" data-accion="ver-oc">📄 Ver OC</button>
       ${pA&&c.estado==="Solicitado"?`<button class="btn btn-g btn-xs" data-accion="aprobar-oc">✓ Aprobar</button>`:""}
+      ${c.estado==="Solicitado"?`<button class="btn btn-gh btn-xs" data-accion="editar-oc">✏ Editar</button>`:""}
+      ${(c.estado==="Solicitado"||pA)?`<button class="btn btn-xs" style="background:rgba(239,68,68,.1);color:#F87171;border:1px solid rgba(239,68,68,.2)" data-accion="eliminar-oc">🗑</button>`:""}
       ${vP?`<button class="btn btn-gh btn-xs" data-accion="precio-oc">💲 Precio</button>`:""}
     </div>
   </div>`).join("");
@@ -818,7 +858,46 @@ function renderComprasItems(lista){
     if(accion==="ver-oc")verOC(c.compra_id);
     else if(accion==="aprobar-oc")modalAprobarOC(c.compra_id);
     else if(accion==="precio-oc")modalPrecioC(c.compra_id,c.precio_unitario||0);
+    else if(accion==="editar-oc")modalEditarOC(c);
+    else if(accion==="eliminar-oc")eliminarOC(c.compra_id);
   };
+}
+function modalEditarOC(c){
+  const invOpts=S.inv.map(i=>`<option value="${i.item_id}">${i.descripcion} (${i.item_id})</option>`).join("");
+  showModal(`<button class="mo-x" onclick="closeModal()">✕</button>
+    <div class="mo-t">Editar OC — ${c.compra_id}</div>
+    <div class="al al-w">Solo se puede editar si todavía no fue aprobada.</div>
+    <div class="fg"><label>DESCRIPCIÓN</label><input class="inp" id="eoc-de" value="${c.descripcion||c.item_id||""}"></div>
+    <div class="fg"><label>ÍTEM (cambiar si es necesario)</label>
+      <select class="sel" id="eoc-it" onchange="autoFillEditOC()">
+        <option value="${c.item_id||""}">${c.descripcion||c.item_id||"— sin cambiar —"}</option>
+        ${invOpts}
+      </select>
+    </div>
+    <div class="g2f">
+      <div class="fg"><label>CANTIDAD</label><input class="inp" type="number" id="eoc-ca" value="${c.cantidad_faltante||1}" min="0.01"></div>
+      <div class="fg"><label>UNIDAD</label><input class="inp" id="eoc-un" value="${c.unidad||"ud."}"></div>
+    </div>
+    <div class="fg"><label>PROVEEDOR</label><input class="inp" id="eoc-pv" value="${c.proveedor||""}"></div>
+    <div class="fg"><label>PRIORIDAD</label>
+      <select class="sel" id="eoc-pr">
+        ${["Normal","Media","Alta","Urgente"].map(p=>`<option${p===c.prioridad?" selected":""}>${p}</option>`).join("")}
+      </select>
+    </div>
+    <button class="btn btn-p btn-bl" onclick="saveEditarOC('${c.compra_id}')">Guardar cambios</button>`);
+}
+function autoFillEditOC(){
+  const sel=el("eoc-it");if(!sel||!sel.value)return;
+  const it=S.inv.find(i=>i.item_id===sel.value);
+  if(it){el("eoc-de").value=it.descripcion;el("eoc-un").value=it.unidad||"ud.";}
+}
+async function saveEditarOC(id){
+  const body={compra_id:id,descripcion:g("eoc-de"),item_id:g("eoc-it"),cantidad_faltante:g("eoc-ca"),unidad:g("eoc-un"),proveedor:g("eoc-pv"),prioridad:g("eoc-pr")};
+  try{await api("editarCompra",body);closeModal();toast("✓ OC actualizada");loadCompras();}catch(e){toast("Error: "+e.message);}
+}
+async function eliminarOC(id){
+  if(!confirm(`¿Eliminar OC ${id}? Esta acción no se puede deshacer.`))return;
+  try{await api("eliminarCompra",{compra_id:id});toast("✓ OC eliminada");loadCompras();}catch(e){toast("Error: "+e.message);}
 }
 function modalAprobarOC(id){
   const fp=["Contado","30 días","60 días","90 días","Transferencia bancaria","Cheque","Tarjeta"];
@@ -874,29 +953,90 @@ async function verOC(id){
 }
 async function modalCompra(){
   if(!S.inv.length){toast("Cargando inventario...");await loadInv();}
-  // Load aprobadores if not cached
   if(!S._aprobadores){
     try{const d=await api("getUsuarios");S._aprobadores=(d.usuarios||[]).filter(u=>["Dirección","Contabilidad","Comercial"].includes(u.area)&&u.activo);}catch(e){S._aprobadores=[];}
   }
-  const items=S.inv.map(i=>`<option value="${i.item_id}">${i.descripcion} (${i.item_id})</option>`).join("");
   const obras=S.obras.map(o=>`<option value="${o.obra_id}">${o.obra_id} — ${o.cliente}</option>`).join("");
   const provs=S.proveedores.map(p=>`<option value="${p.nombre}">${p.nombre}</option>`).join("");
+  const aprobOpts=S._aprobadores.map(u=>`<option value="${u.user_id}">${u.nombre} (${u.area})</option>`).join("");
+  window._cOC=0;
   showModal(`<button class="mo-x" onclick="closeModal()">✕</button>
     <div class="mo-t">Nueva solicitud de compra</div>
-    <div class="fg"><label>OBRA</label><select class="sel" id="c-ob"><option value="">— sin obra —</option>${obras}</select></div>
-    <div class="fg"><label>ÍTEM *</label><select class="sel" id="c-it" onchange="autoDescCompra()"><option value="">— elegir —</option>${items}</select></div>
-    <div class="fg"><label>DESCRIPCIÓN</label><input class="inp" id="c-de"></div>
-    <div class="g2f"><div class="fg"><label>CANTIDAD *</label><input class="inp" type="number" id="c-ca"></div>
-    <div class="fg"><label>UNIDAD</label><input class="inp" id="c-un" placeholder="m, ud., kg"></div></div>
-    <div class="g2f"><div class="fg"><label>PROVEEDOR</label><input class="inp" id="c-pv" list="prov-dl"><datalist id="prov-dl">${provs}</datalist></div>
-    <div class="fg"><label>PRIORIDAD</label><select class="sel" id="c-pr"><option>Normal</option><option>Media</option><option>Alta</option><option>Urgente</option></select></div></div>
-    <div class="fg"><label>FECHA LÍMITE</label><input class="inp" type="date" id="c-fe"></div>
-    <div class="fg"><label>DIRIGIR APROBACIÓN A</label>
-    <select class="sel" id="c-aprobador">
-      <option value="">— Dirección y Contabilidad (todos) —</option>
-      ${S._aprobadores?.map(u=>`<option value="${u.user_id}">${u.nombre} (${u.area})</option>`).join("")||""}
-    </select></div>
-    <button class="btn btn-p btn-bl" onclick="saveCompra()">Enviar solicitud</button>`);
+    <div class="g2f">
+      <div class="fg"><label>OBRA</label><select class="sel" id="c-ob"><option value="">— sin obra —</option>${obras}</select></div>
+      <div class="fg"><label>PROVEEDOR</label><input class="inp" id="c-pv" list="prov-dl"><datalist id="prov-dl">${provs}</datalist></div>
+    </div>
+    <div class="g2f">
+      <div class="fg"><label>PRIORIDAD</label><select class="sel" id="c-pr"><option>Normal</option><option>Media</option><option>Alta</option><option>Urgente</option></select></div>
+      <div class="fg"><label>FECHA LÍMITE</label><input class="inp" type="date" id="c-fe"></div>
+    </div>
+    <div class="fg"><label>🔔 DIRIGIR APROBACIÓN A</label>
+      <select class="sel" id="c-aprobador">
+        <option value="">— Todos (Dirección y Contabilidad) —</option>
+        ${aprobOpts}
+      </select>
+    </div>
+    <div class="ct mt8">ÍTEMS A SOLICITAR</div>
+    <div id="oc-items"></div>
+    <button class="btn btn-gh btn-sm mb12" onclick="addItemOC()">+ Agregar ítem</button>
+    <div class="fg"><label>OBSERVACIONES</label><input class="inp" id="c-obs" placeholder="Notas generales..."></div>
+    <button class="btn btn-p btn-bl" onclick="saveCompraMulti()">Enviar solicitud</button>`);
+  setTimeout(()=>addItemOC(),50);
+}
+function itemOCHTML(idx){
+  const invOpts=S.inv.map(i=>`<option value="${i.item_id}|${i.descripcion}|${i.unidad||'ud.'}">${i.descripcion} (${i.item_id})</option>`).join("");
+  return `<div style="background:var(--card2);border:1px solid var(--border2);border-radius:8px;padding:10px;margin-bottom:8px" id="oci-${idx}">
+    <div class="flex between mb8">
+      <span class="xs mu bold">Ítem ${idx+1}</span>
+      <button class="btn btn-r btn-xs" onclick="document.getElementById('oci-${idx}').remove()">✕</button>
+    </div>
+    <div class="fg" style="margin-bottom:8px">
+      <select class="sel" id="oc-sel-${idx}" onchange="autoFillOC(${idx})">
+        <option value="">— elegir del inventario (opcional) —</option>${invOpts}
+      </select>
+    </div>
+    <div class="fg" style="margin-bottom:8px">
+      <input class="inp" id="oc-desc-${idx}" placeholder="Descripción del ítem (requerido)">
+    </div>
+    <div class="g2f" style="margin-bottom:0">
+      <div class="fg" style="margin-bottom:0"><input class="inp" type="number" value="1" id="oc-can-${idx}" min="0.01" step="0.01" placeholder="Cantidad"></div>
+      <div class="fg" style="margin-bottom:0"><input class="inp" id="oc-uni-${idx}" placeholder="Unidad (m, ud., kg...)"></div>
+    </div>
+  </div>`;
+}
+function addItemOC(){
+  const idx=window._cOC||0,wrap=el("oc-items");
+  if(!wrap)return;
+  const div=document.createElement("div");
+  div.innerHTML=itemOCHTML(idx);
+  wrap.appendChild(div.firstElementChild);
+  window._cOC=(window._cOC||0)+1;
+}
+function autoFillOC(idx){
+  const sel=el("oc-sel-"+idx);if(!sel||!sel.value)return;
+  const parts=sel.value.split("|");
+  if(parts.length>=2){el("oc-desc-"+idx).value=parts[1]||"";el("oc-uni-"+idx).value=parts[2]||"ud.";}
+}
+async function saveCompraMulti(){
+  const items=[];
+  document.querySelectorAll("#oc-items > [id^='oci-']").forEach(row=>{
+    const idx=row.id.replace("oci-","");
+    const desc=el("oc-desc-"+idx)?.value?.trim()||"";
+    const can=parseFloat(el("oc-can-"+idx)?.value)||0;
+    const uni=el("oc-uni-"+idx)?.value||"ud.";
+    const sel=el("oc-sel-"+idx);
+    let itemId="";
+    if(sel?.value){itemId=sel.value.split("|")[0]||"";}
+    if(desc&&can>0)items.push({item_id:itemId,descripcion:desc,cantidad_faltante:can,unidad:uni});
+  });
+  if(!items.length){toast("Agregá al menos un ítem con descripción y cantidad");return;}
+  const body={obra_id:g("c-ob"),proveedor:g("c-pv"),prioridad:g("c-pr"),fecha_limite:g("c-fe"),aprobador_id:g("c-aprobador"),observaciones:g("c-obs"),items:JSON.stringify(items)};
+  try{
+    await api("createCompraMulti",body);
+    closeModal();
+    toast("✓ Solicitud enviada ("+items.length+" ítem"+(items.length>1?"s":"")+")");
+    loadCompras();
+  }catch(e){toast("Error: "+e.message);}
 }
 function autoDescCompra(){const it=S.inv.find(i=>i.item_id===g("c-it"));if(it){el("c-de").value=it.descripcion;el("c-un").value=it.unidad||"";}}
 async function saveCompra(){
@@ -1227,18 +1367,15 @@ function modalCrearRemito(){
   const clis=S.clientes.map(c=>`<option value="${c.cliente_id}">${c.razon_social}</option>`).join("");
   const obras=S.obras.map(o=>`<option value="${o.obra_id}">${o.obra_id} — ${o.cliente}</option>`).join("");
   const invOpts=S.inv.map(i=>`<option value="${i.item_id}">${i.descripcion} (${i.item_id})</option>`).join("");
-  window._cRIC=1;
+  window._cRIC=0;
+  // Add first row after modal renders
+  setTimeout(()=>{addItemRC();},50);
   showModal(`<button class="mo-x" onclick="closeModal()">✕</button>
     <div class="mo-t">Nuevo remito</div>
     <div class="fg"><label>CLIENTE *</label><select class="sel" id="r-cli">${clis}</select></div>
     <div class="fg"><label>OBRA (opcional)</label><select class="sel" id="r-ob"><option value="">— sin obra —</option>${obras}</select></div>
     <div class="ct mt8">ÍTEMS</div>
-    <div id="r-items"><div class="flex gap8 mb8" id="ri-0">
-      <select class="sel" style="flex:2" id="ri-desc-0" onchange="autoFillRC(0)">${invOpts}</select>
-      <input class="inp" style="flex:1" type="number" value="1" id="ri-can-0" min="1">
-      <input class="inp" style="flex:1" placeholder="ud." id="ri-uni-0">
-      <button class="btn btn-r btn-xs" onclick="document.getElementById('ri-0').remove()">✕</button>
-    </div></div>
+    <div id="r-items"></div>
     <button class="btn btn-gh btn-sm mb12" onclick="addItemRC()">+ Agregar ítem</button>
     <div class="fg"><label>OBSERVACIONES</label><input class="inp" id="r-obs"></div>
     <button class="btn btn-p btn-bl" onclick="saveCrearRemito()">Emitir remito</button>`);
@@ -1251,14 +1388,48 @@ function modalCrearRemitoDesdeObra(obraId,cliente){
   modalCrearRemito();
   setTimeout(()=>{const s=el("r-ob");if(s)for(let i=0;i<s.options.length;i++)if(s.options[i].value===obraId){s.selectedIndex=i;break;}},300);
 }
+function itemRowHTML(idx){
+  const invOpts=S.inv.map(i=>`<option value="${i.item_id}|${i.descripcion}|${i.unidad||'ud.'}">${i.descripcion} (${i.item_id})</option>`).join("");
+  return `<div style="background:var(--card2);border:1px solid var(--border2);border-radius:8px;padding:10px;margin-bottom:8px" id="ri-${idx}">
+    <div class="flex gap8 mb8">
+      <div style="flex:2">
+        <div class="xs mu mb4">Ítem del inventario</div>
+        <select class="sel" id="ri-sel-${idx}" onchange="autoFillRC(${idx})" style="width:100%">
+          <option value="">— elegir del inventario —</option>${invOpts}
+        </select>
+      </div>
+      <button class="btn btn-r btn-xs" style="flex-shrink:0;align-self:flex-end" onclick="document.getElementById('ri-${idx}').remove()">✕</button>
+    </div>
+    <div class="g2f">
+      <div class="fg" style="margin-bottom:0"><div class="xs mu mb4">Descripción (o ingresá manualmente)</div>
+        <input class="inp" id="ri-desc-${idx}" placeholder="Descripción del ítem...">
+      </div>
+      <div class="flex gap8">
+        <div class="fg" style="flex:1;margin-bottom:0"><div class="xs mu mb4">Cant.</div>
+          <input class="inp" type="number" value="1" id="ri-can-${idx}" min="1">
+        </div>
+        <div class="fg" style="flex:1;margin-bottom:0"><div class="xs mu mb4">Unidad</div>
+          <input class="inp" id="ri-uni-${idx}" placeholder="ud.">
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
 function addItemRC(){
   const idx=window._cRIC||1,wrap=el("r-items");
-  const invOpts=S.inv.map(i=>`<option value="${i.item_id}">${i.descripcion} (${i.item_id})</option>`).join("");
-  const div=document.createElement("div");div.className="flex gap8 mb8";div.id="ri-"+idx;
-  div.innerHTML=`<select class="sel" style="flex:2" id="ri-desc-${idx}" onchange="autoFillRC(${idx})">${invOpts}</select><input class="inp" style="flex:1" type="number" value="1" id="ri-can-${idx}" min="1"><input class="inp" style="flex:1" placeholder="ud." id="ri-uni-${idx}"><button class="btn btn-r btn-xs" onclick="this.parentElement.remove()">✕</button>`;
-  wrap.appendChild(div);window._cRIC=(window._cRIC||1)+1;
+  const div=document.createElement("div");
+  div.innerHTML=itemRowHTML(idx);
+  wrap.appendChild(div.firstElementChild);
+  window._cRIC=(window._cRIC||1)+1;
 }
-function autoFillRC(idx){const s=el("ri-desc-"+idx);const it=S.inv.find(i=>i.item_id===s?.value);if(it)el("ri-uni-"+idx).value=it.unidad||"";}
+function autoFillRC(idx){
+  const sel=el("ri-sel-"+idx);if(!sel||!sel.value)return;
+  const parts=sel.value.split("|");
+  if(parts.length>=2){
+    el("ri-desc-"+idx).value=parts[1]||"";
+    el("ri-uni-"+idx).value=parts[2]||"ud.";
+  }
+}
 async function saveCrearRemito(){
   const cliSel=el("r-cli");
   const cliId=cliSel.value,cliNom=cliSel.options[cliSel.selectedIndex]?.text||"";
@@ -1266,8 +1437,15 @@ async function saveCrearRemito(){
   const items=[];
   document.querySelectorAll("#r-items > [id^='ri-']").forEach(row=>{
     const idx=row.id.replace("ri-","");
-    const s=el("ri-desc-"+idx),can=el("ri-can-"+idx),uni=el("ri-uni-"+idx);
-    if(s&&can&&parseFloat(can.value)>0){const it=S.inv.find(i=>i.item_id===s.value);items.push({item_id:s.value,descripcion:s.options[s.selectedIndex]?.text||"",cantidad:parseFloat(can.value)||0,unidad:uni?.value||it?.unidad||"ud.",precio_unitario:0,subtotal:0});}
+    const desc=el("ri-desc-"+idx),can=el("ri-can-"+idx),uni=el("ri-uni-"+idx),sel=el("ri-sel-"+idx);
+    const descVal=desc?.value?.trim()||"";
+    const canVal=parseFloat(can?.value)||0;
+    if(descVal&&canVal>0){
+      // Get item_id from select if chosen
+      let itemId="",itemDesc=descVal;
+      if(sel?.value){const parts=sel.value.split("|");itemId=parts[0]||"";}
+      items.push({item_id:itemId,descripcion:itemDesc,cantidad:canVal,unidad:uni?.value||"ud.",precio_unitario:0,subtotal:0});
+    }
   });
   if(!items.length){toast("Agregá al menos un ítem");return;}
   try{await api("createRemito",{cliente_id:cliId,cliente_nombre:cliNom,obra_id:g("r-ob"),items:JSON.stringify(items),subtotal:0,observaciones:g("r-obs")});closeModal();toast("✓ Remito emitido");loadRemitos();}catch(e){toast("Error: "+e.message);}
