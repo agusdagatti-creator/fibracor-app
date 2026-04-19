@@ -441,6 +441,13 @@ async function loadDash(){
     </div>`;
     if(d.inventario?.criticos>0)h+=`<div class="al al-d mb12">⚠ <b>${d.inventario.criticos} ítems bajo mínimo</b><br>${(d.inventario.criticos_lista||[]).slice(0,3).map(i=>`· ${i.descripcion}: ${i.disponible} (mín: ${i.minimo})`).join("<br>")}</div>`;
     if(d.solicitudes_pendientes>0)h+=`<div class="al al-w mb12">📦 <b>${d.solicitudes_pendientes} solicitudes de material pendientes</b> — revisar en Técnicos</div>`;
+    // OCs propias aprobadas/rechazadas (notificacion)
+    if(d.ocs_propias_resueltas?.length){
+      d.ocs_propias_resueltas.forEach(oc=>{
+        if(oc.estado==="Aprobado")h+=`<div class="al al-s mb12">✅ <b>Tu OC ${oc.compra_id} fue aprobada</b> por ${oc.aprobado_por||"Dirección"}${oc.forma_pago?" · Pago: "+oc.forma_pago:""}</div>`;
+        else if(oc.estado==="Rechazado")h+=`<div class="al al-d mb12">❌ <b>Tu OC ${oc.compra_id} fue rechazada</b>${oc.observaciones?" · Motivo: "+oc.observaciones:""}</div>`;
+      });
+    }
     if(d.compras?.pendientes_aprobacion>0&&u.puede?.aprobar_oc)h+=`<div class="al al-i mb12">🛒 <b>${d.compras.pendientes_aprobacion} OCs esperan tu aprobación</b></div>`;
     if(d.ultimos_eventos?.length){
       h+=`<div class="card"><div class="ct">📜 Actividad reciente</div>`;
@@ -786,7 +793,7 @@ function renderComprasItems(lista){
   const dEl=el("d-compras"),pA=S.user.puede?.aprobar_oc,vP=S.user.puede?.ver_precios;
   if(!lista.length){dEl.innerHTML=`<div class="loader" style="padding:40px"><span class="mu">Sin solicitudes</span></div>`;return;}
   const pc={Urgente:"b-red",Alta:"b-amber",Media:"b-blue",Normal:"b-gray"};
-  const ec={Solicitado:"b-amber",Aprobado:"b-green","En gestión":"b-blue",Recibido:"b-gray"};
+  const ec={Solicitado:"b-amber",Aprobado:"b-green","En gestión":"b-blue",Recibido:"b-gray",Rechazado:"b-red"};
   dEl.innerHTML=lista.map((c,i)=>`<div class="li" data-comp="${i}">
     <div class="flex between mb8"><span class="bold">${c.compra_id}</span><span class="badge ${ec[c.estado]||"b-gray"}">${c.estado}</span></div>
     <div class="sm mb8">${c.descripcion||c.item_id}</div>
@@ -816,13 +823,22 @@ function renderComprasItems(lista){
 function modalAprobarOC(id){
   const fp=["Contado","30 días","60 días","90 días","Transferencia bancaria","Cheque","Tarjeta"];
   showModal(`<button class="mo-x" onclick="closeModal()">✕</button>
-    <div class="mo-t">Aprobar OC — ${id}</div>
+    <div class="mo-t">Revisar OC — ${id}</div>
     <div class="al al-i">Solo Dirección y Contabilidad pueden aprobar OCs.</div>
-    <div class="fg"><label>FORMA DE PAGO</label><select class="sel" id="oc-fp">${fp.map(f=>`<option>${f}</option>`).join("")}</select></div>
-    <div class="fg"><label>OBSERVACIONES</label><input class="inp" id="oc-obs"></div>
-    <button class="btn btn-g btn-bl" onclick="saveAprobarOC('${id}')">✓ Confirmar aprobación</button>`);
+    <div id="oc-aprobar-wrap">
+      <div class="fg"><label>FORMA DE PAGO</label><select class="sel" id="oc-fp">${fp.map(f=>`<option>${f}</option>`).join("")}</select></div>
+      <div class="fg"><label>OBSERVACIONES (opcional)</label><input class="inp" id="oc-obs"></div>
+      <button class="btn btn-g btn-bl mb8" onclick="saveAprobarOC('${id}')">✓ Aprobar OC</button>
+    </div>
+    <div class="fg"><label>MOTIVO DE RECHAZO (completar para rechazar)</label><input class="inp" id="oc-motivo-rec" placeholder="Ej: precio fuera de rango, sin presupuesto..."></div>
+    <button class="btn btn-r btn-bl" onclick="saveRechazarOC('${id}')">✕ Rechazar OC</button>`);
 }
 async function saveAprobarOC(id){try{await api("aprobarCompra",{compra_id:id,forma_pago:g("oc-fp"),observaciones:g("oc-obs")});closeModal();toast("✓ OC aprobada");loadCompras();}catch(e){toast("Error: "+e.message);}}
+async function saveRechazarOC(id){
+  const motivo=g("oc-motivo-rec");
+  if(!motivo){toast("Ingresá el motivo del rechazo");return;}
+  try{await api("rechazarCompra",{compra_id:id,motivo});closeModal();toast("OC rechazada");loadCompras();}catch(e){toast("Error: "+e.message);}
+}
 function modalPrecioC(id,precio){
   showModal(`<button class="mo-x" onclick="closeModal()">✕</button>
     <div class="mo-t">Precio — ${id}</div>
@@ -856,8 +872,12 @@ async function verOC(id){
       <button class="btn btn-gh btn-bl mt8" onclick="window.print()">🖨 Imprimir OC</button>`);
   }catch(e){showModal(`<button class="mo-x" onclick="closeModal()">✕</button><div class="al al-d">${e.message}</div>`);}
 }
-function modalCompra(){
-  if(!S.inv.length){toast("Cargando inventario...");loadInv();return;}
+async function modalCompra(){
+  if(!S.inv.length){toast("Cargando inventario...");await loadInv();}
+  // Load aprobadores if not cached
+  if(!S._aprobadores){
+    try{const d=await api("getUsuarios");S._aprobadores=(d.usuarios||[]).filter(u=>["Dirección","Contabilidad","Comercial"].includes(u.area)&&u.activo);}catch(e){S._aprobadores=[];}
+  }
   const items=S.inv.map(i=>`<option value="${i.item_id}">${i.descripcion} (${i.item_id})</option>`).join("");
   const obras=S.obras.map(o=>`<option value="${o.obra_id}">${o.obra_id} — ${o.cliente}</option>`).join("");
   const provs=S.proveedores.map(p=>`<option value="${p.nombre}">${p.nombre}</option>`).join("");
@@ -871,12 +891,16 @@ function modalCompra(){
     <div class="g2f"><div class="fg"><label>PROVEEDOR</label><input class="inp" id="c-pv" list="prov-dl"><datalist id="prov-dl">${provs}</datalist></div>
     <div class="fg"><label>PRIORIDAD</label><select class="sel" id="c-pr"><option>Normal</option><option>Media</option><option>Alta</option><option>Urgente</option></select></div></div>
     <div class="fg"><label>FECHA LÍMITE</label><input class="inp" type="date" id="c-fe"></div>
-    <div class="al al-w">La aprobación será enviada a Dirección y Contabilidad.</div>
+    <div class="fg"><label>DIRIGIR APROBACIÓN A</label>
+    <select class="sel" id="c-aprobador">
+      <option value="">— Dirección y Contabilidad (todos) —</option>
+      ${S._aprobadores?.map(u=>`<option value="${u.user_id}">${u.nombre} (${u.area})</option>`).join("")||""}
+    </select></div>
     <button class="btn btn-p btn-bl" onclick="saveCompra()">Enviar solicitud</button>`);
 }
 function autoDescCompra(){const it=S.inv.find(i=>i.item_id===g("c-it"));if(it){el("c-de").value=it.descripcion;el("c-un").value=it.unidad||"";}}
 async function saveCompra(){
-  const body={obra_id:g("c-ob"),item_id:g("c-it"),descripcion:g("c-de"),cantidad_faltante:g("c-ca"),unidad:g("c-un"),proveedor:g("c-pv"),prioridad:g("c-pr"),fecha_limite:g("c-fe")};
+  const body={obra_id:g("c-ob"),item_id:g("c-it"),descripcion:g("c-de"),cantidad_faltante:g("c-ca"),unidad:g("c-un"),proveedor:g("c-pv"),prioridad:g("c-pr"),fecha_limite:g("c-fe"),aprobador_id:g("c-aprobador")};
   if(!body.item_id||!body.cantidad_faltante){toast("Seleccioná ítem y cantidad");return;}
   try{await api("createCompra",body);closeModal();toast("✓ Solicitud enviada");loadCompras();}catch(e){toast("Error: "+e.message);}
 }
@@ -1358,6 +1382,7 @@ async function loadTec(){
         <button class="btn btn-gh btn-xs" data-accion="asignar-tec">🏗 Asignar obra</button>
       </div>
     </div>`).join("");
+    S._tecnicos=tecs; // cache para dropdowns
     el("d-tec").innerHTML=h;
     el("d-tec").addEventListener("click",e=>{
       const accion=e.target.closest("[data-accion]")?.dataset.accion;if(!accion)return;
@@ -1382,6 +1407,8 @@ async function verReportesTecnico(tecId,nombre){
 async function atenderSolicitud(repId){try{await api("atenderSolicitud",{reporte_id:repId});toast("✓ Solicitud atendida");loadTec();}catch(e){toast("Error: "+e.message);}}
 function modalAsignarTecnico(tecId){
   const obras=S.obras.filter(o=>o.estado==="En ejecución").map(o=>`<option value="${o.obra_id}">${o.obra_id} — ${o.cliente}</option>`).join("");
+  // Obtener lista de tecnicos disponibles del Sheet
+  const tecOpts=S._tecnicos?S._tecnicos.map(t=>`<option value="${t.nombre||t.tecnico_id}"${t.tecnico_id===tecId?" selected":""}>${t.nombre||t.tecnico_id}</option>`).join(""):"";
   showModal(`<button class="mo-x" onclick="closeModal()">✕</button>
     <div class="mo-t">Asignar obra — Técnico ${tecId}</div>
     <div class="fg"><label>ESTADO</label><select class="sel" id="at-est"><option value="Disponible">Disponible</option><option value="En obra" selected>En obra</option><option value="De viaje">De viaje</option></select></div>
@@ -1390,14 +1417,31 @@ function modalAsignarTecnico(tecId){
     <div class="fg"><label>VIÁTICOS ($)</label><input class="inp" type="number" id="at-vi" value="0"></div>
     <button class="btn btn-p btn-bl" onclick="saveAsignarTecnico('${tecId}')">Asignar</button>`);
 }
-async function saveAsignarTecnico(tecId){try{await api("asignarTecnico",{tecnico_id:tecId,estado:g("at-est"),obra_id:g("at-ob"),fecha_salida:g("at-fs"),fecha_regreso:g("at-fr"),viaticos:g("at-vi")});closeModal();toast("✓ Técnico asignado");loadTec();}catch(e){toast("Error: "+e.message);}}
+async function saveAsignarTecnico(tecId){
+  const obraId=g("at-ob");
+  try{
+    await api("asignarTecnico",{tecnico_id:tecId,estado:g("at-est"),obra_id:obraId,fecha_salida:g("at-fs"),fecha_regreso:g("at-fr"),viaticos:g("at-vi")});
+    // Si se asignó a una obra, actualizar el jefe_obra de la obra
+    if(obraId){
+      const tec=S._tecnicos?.find(t=>t.tecnico_id===tecId);
+      if(tec)await api("cambiarTecnicoObra",{obra_id:obraId,tecnico:tec.nombre||tecId});
+    }
+    closeModal();toast("✓ Técnico asignado");loadTec();
+  }catch(e){toast("Error: "+e.message);}
+}
 
 /* ── MIS TAREAS (técnico) ───────────────────────── */
 async function loadMT(){
   el("d-mt").innerHTML=ldr();
   try{
     const [dO,dR]=await Promise.all([api("getObras"),api("getReportesTecnico",{tecnico_id:S.user.user_id})]);
-    const misObras=dO.obras||[],misRep=dR.reportes||[];
+    const todasObras=dO.obras||[];
+    const misObras=todasObras.filter(o=>
+      o.jefe_obra===S.user.nombre ||
+      o.jefe_obra===S.user.user_id ||
+      String(o.jefe_obra||"").toLowerCase()===String(S.user.nombre||"").toLowerCase()
+    );
+    const misRep=dR.reportes||[];
     let h="";
     if(misObras.length){
       h+=`<div class="card mb12"><div class="ct">🏗 Mis obras asignadas</div>`;
@@ -1480,6 +1524,7 @@ async function loadUsuarios(){
   try{
     const d=await api("getUsuarios"),usu=d.usuarios||[];
     el("usuarios-count").textContent=usu.length+" usuarios";
+    S._usuariosData=usu; // cache for permisos modal
     const ac={"Dirección":"#60A5FA",Operaciones:"#22D3EE",Comercial:"#A78BFA","Técnico":"#FBBF24","Pañol":"#F87171",Contabilidad:"#34D399"};
     el("d-usu").innerHTML=usu.map((u,i)=>`<div class="ccard" style="cursor:default;opacity:${u.activo?1:.5}" data-usr="${i}">
       <div class="flex gap8" style="gap:12px">
@@ -1522,17 +1567,80 @@ async function saveNuevoUser(){
 }
 function modalEditUser(id,nombre,email,area,rol){
   const areas=["Dirección","Operaciones","Comercial","Técnico","Pañol","Contabilidad"];
+  const allMods=[
+    {k:"dashboard",l:"Dashboard"},
+    {k:"crm",l:"CRM Clientes/Proveedores"},
+    {k:"obras",l:"Obras"},
+    {k:"remitos",l:"Remitos"},
+    {k:"costos",l:"Costos"},
+    {k:"inventario",l:"Stock / Inventario"},
+    {k:"movimientos",l:"Movimientos"},
+    {k:"compras",l:"Compras"},
+    {k:"tecnicos",l:"Técnicos"},
+    {k:"mis_tareas",l:"Mis tareas"},
+    {k:"usuarios",l:"Usuarios"},
+    {k:"trazabilidad",l:"Trazabilidad"}
+  ];
+  const allPerms=[
+    {k:"editar_obras",l:"Editar / crear obras"},
+    {k:"eliminar_obras",l:"Eliminar obras"},
+    {k:"ver_precios",l:"Ver precios de productos"},
+    {k:"ver_costos",l:"Ver costos de obras"},
+    {k:"aprobar_oc",l:"Aprobar órdenes de compra"},
+    {k:"crear_remito",l:"Emitir remitos"},
+    {k:"ingresar_mercaderia",l:"Ingresar mercadería"},
+    {k:"gestionar_usuarios",l:"Gestionar usuarios"}
+  ];
+  // Buscar usuario actual para obtener sus permisos guardados
+  const uData=S._usuariosData?.find(u=>u.user_id===id)||{};
+  const savedMods=uData.modulos_custom||[];
+  const savedPerms=uData.permisos_custom||{};
+  // Defaults por área si no hay custom
+  const DEFAULT_MODS={
+    "Dirección":["dashboard","crm","obras","inventario","movimientos","compras","costos","tecnicos","remitos","usuarios","trazabilidad"],
+    "Operaciones":["dashboard","obras","inventario","movimientos","compras","costos","tecnicos","remitos","trazabilidad"],
+    "Comercial":["dashboard","crm","obras","inventario","compras","costos","remitos","trazabilidad"],
+    "Técnico":["dashboard","mis_tareas","inventario","movimientos"],
+    "Pañol":["dashboard","inventario","movimientos","compras"],
+    "Contabilidad":["dashboard","costos","inventario","compras","remitos","trazabilidad","crm"]
+  };
+  const activeMods=savedMods.length?savedMods:(DEFAULT_MODS[area]||["dashboard"]);
+  const modsHtml=allMods.map(m=>`<label style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:12px;cursor:pointer">
+    <input type="checkbox" id="emod-${m.k}" ${activeMods.includes(m.k)?"checked":""}> ${m.l}</label>`).join("");
+  const permsHtml=allPerms.map(p=>`<label style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:12px;cursor:pointer">
+    <input type="checkbox" id="eperm-${p.k}" ${savedPerms[p.k]!==undefined?savedPerms[p.k]:(uData.puede?.[p.k]||false)?"checked":""}> ${p.l}</label>`).join("");
   showModal(`<button class="mo-x" onclick="closeModal()">✕</button>
     <div class="mo-t">Editar usuario</div>
     <div class="fg"><label>NOMBRE</label><input class="inp" id="eu-n" value="${nombre}"></div>
     <div class="fg"><label>EMAIL</label><input class="inp" id="eu-e" value="${email}"></div>
-    <div class="g2f"><div class="fg"><label>ÁREA</label><select class="sel" id="eu-a">${areas.map(a=>`<option${a===area?" selected":""}>${a}</option>`).join("")}</select></div><div class="fg"><label>ROL</label><input class="inp" id="eu-r" value="${rol}"></div></div>
+    <div class="g2f"><div class="fg"><label>ÁREA</label><select class="sel" id="eu-a" onchange="aplicarDefaults(this.value)">${areas.map(a=>`<option${a===area?" selected":""}>${a}</option>`).join("")}</select></div><div class="fg"><label>ROL</label><input class="inp" id="eu-r" value="${rol}"></div></div>
     <div class="fg"><label>NUEVA CONTRASEÑA (vacío = no cambia)</label><input class="inp" type="password" id="eu-p"></div>
-    <button class="btn btn-p btn-bl" onclick="saveEditUser('${id}')">Guardar</button>`);
+    <div class="card mt8"><div class="ct">📋 Módulos visibles</div>${modsHtml}</div>
+    <div class="card mt8"><div class="ct">🔐 Permisos</div>${permsHtml}</div>
+    <button class="btn btn-p btn-bl mt8" onclick="saveEditUser('${id}')">Guardar</button>`);
+}
+const DEFAULT_MODS_MAP={"Dirección":["dashboard","crm","obras","inventario","movimientos","compras","costos","tecnicos","remitos","usuarios","trazabilidad"],"Operaciones":["dashboard","obras","inventario","movimientos","compras","costos","tecnicos","remitos","trazabilidad"],"Comercial":["dashboard","crm","obras","inventario","compras","costos","remitos","trazabilidad"],"Técnico":["dashboard","mis_tareas","inventario","movimientos"],"Pañol":["dashboard","inventario","movimientos","compras"],"Contabilidad":["dashboard","costos","inventario","compras","remitos","trazabilidad","crm"]};
+function aplicarDefaults(area){
+  const mods=DEFAULT_MODS_MAP[area]||["dashboard"];
+  ["dashboard","crm","obras","remitos","costos","inventario","movimientos","compras","tecnicos","mis_tareas","usuarios","trazabilidad"].forEach(k=>{
+    const cb=document.getElementById("emod-"+k);if(cb)cb.checked=mods.includes(k);
+  });
 }
 async function saveEditUser(id){
   const body={user_id:id,nombre:g("eu-n"),email:g("eu-e"),area:g("eu-a"),rol:g("eu-r")};
   if(g("eu-p"))body.password=g("eu-p");
+  // Collect checked modules
+  const mods=[];
+  ["dashboard","crm","obras","remitos","costos","inventario","movimientos","compras","tecnicos","mis_tareas","usuarios","trazabilidad"].forEach(k=>{
+    const cb=document.getElementById("emod-"+k);if(cb&&cb.checked)mods.push(k);
+  });
+  body.modulos_custom=JSON.stringify(mods);
+  // Collect permissions
+  const perms={};
+  ["editar_obras","eliminar_obras","ver_precios","ver_costos","aprobar_oc","crear_remito","ingresar_mercaderia","gestionar_usuarios"].forEach(k=>{
+    const cb=document.getElementById("eperm-"+k);if(cb)perms[k]=cb.checked;
+  });
+  body.permisos_custom=JSON.stringify(perms);
   try{await api("updateUsuario",body);closeModal();toast("✓ Usuario actualizado");loadUsuarios();}catch(e){toast("Error: "+e.message);}
 }
 async function toggleUser(id){
