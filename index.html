@@ -1677,19 +1677,30 @@ async function loadMT(){
   try{
     const [dO,dR]=await Promise.all([api("getObras"),api("getReportesTecnico",{tecnico_id:S.user.user_id})]);
     const todasObras=dO.obras||[];
+    // Normalizar nombre para comparar sin importar acentos o encoding
+    const normStr=str=>String(str||"").toLowerCase()
+      .replace(/[áàäâ]/g,"a").replace(/[éèëê]/g,"e")
+      .replace(/[íìïî]/g,"i").replace(/[óòöô]/g,"o")
+      .replace(/[úùüû]/g,"u").replace(/[ñ]/g,"n").replace(/\?/g,"").trim();
     const nombreUser=S.user.nombre||"";
     const idUser=S.user.user_id||"";
+    const normNombre=normStr(nombreUser);
     const misObras=todasObras.filter(o=>{
-      // Jefe de obra
+      // Jefe de obra - comparar normalizado
       if(o.jefe_obra&&(
-        o.jefe_obra===nombreUser ||
-        o.jefe_obra===idUser ||
-        String(o.jefe_obra).toLowerCase()===nombreUser.toLowerCase()
+        normStr(o.jefe_obra)===normNombre ||
+        String(o.jefe_obra)===idUser
       )) return true;
       // Técnico adicional asignado
       if(o.tecnicos_asignados){
         const asig=String(o.tecnicos_asignados);
-        if(asig.indexOf(nombreUser)>=0||asig.indexOf(idUser)>=0) return true;
+        if(normStr(asig).indexOf(normNombre)>=0) return true;
+        if(idUser&&asig.indexOf(idUser)>=0) return true;
+        // Parsear JSON array
+        try{
+          const arr=JSON.parse(asig);
+          if(arr.some(v=>normStr(v)===normNombre||String(v)===idUser)) return true;
+        }catch(e){}
       }
       return false;
     });
