@@ -548,56 +548,119 @@ async function modalObra(){
   // Asegurar clientes y tecnicos cargados
   if(!S.clientes.length){try{const d=await api("getClientes");S.clientes=d.clientes||[];}catch(e){}}
   if(!S._tecnicos){try{const d=await api("getTecnicos");S._tecnicos=d.tecnicos||[];}catch(e){S._tecnicos=[];}}
+
+  // Opciones de clientes
   const cliOpts=S.clientes.map(c=>`<option value="${c.razon_social}">${c.razon_social}${c.ciudad?" — "+c.ciudad:""}</option>`).join("");
-  const tecOpts=S._tecnicos.map(t=>`<option value="${t.nombre||t.tecnico_id}">${t.nombre||t.tecnico_id}</option>`).join("");
+  // Opciones de técnicos
+  const tecOpts=`<option value="">— sin asignar —</option>`+S._tecnicos.map(t=>`<option value="${t.nombre||t.tecnico_id}">${t.nombre||t.tecnico_id}</option>`).join("");
+
   showModal(`<button class="mo-x" onclick="closeModal()">✕</button>
-    <div class="mo-t">Nueva Orden de Inicio de Obra</div>
-    <div class="g2f">
-      <div class="fg"><label>CÓDIGO</label><input class="inp" id="f-oid" placeholder="NH-02"></div>
-      <div class="fg"><label>CLIENTE *</label>
-        <select class="sel" id="f-cli-sel" onchange="el('f-cli').value=this.value">
-          <option value="">— elegir cliente —</option>${cliOpts}
-        </select>
-        <input class="inp" id="f-cli" placeholder="O escribir nombre del cliente..." style="margin-top:4px">
+    <div class="mo-t">Nueva Orden de Trabajo</div>
+    <div class="fg">
+      <label>CÓDIGO (se genera automáticamente al elegir cliente)</label>
+      <div class="flex gap8">
+        <input class="inp" id="f-oid" placeholder="OT-HE-0001" style="flex:1" readonly>
+        <button class="btn btn-gh btn-sm" onclick="regenerarCodigoObra()" title="Regenerar código">↺</button>
       </div>
     </div>
-    <div class="fg"><label>NOMBRE *</label><input class="inp" id="f-nom"></div>
-    <div class="fg"><label>SITIO</label><input class="inp" id="f-sit"></div>
-    <div class="fg"><label>ALCANCE TÉCNICO</label><textarea class="ta" id="f-alc"></textarea></div>
+    <div class="fg">
+      <label>CLIENTE *</label>
+      <select class="sel" id="f-cli-sel" onchange="onClienteObra(this.value)">
+        <option value="">— elegir cliente —</option>${cliOpts}
+      </select>
+      <input class="inp" id="f-cli" placeholder="O escribir nombre del cliente..." style="margin-top:6px" oninput="onClienteObraTexto(this.value)">
+    </div>
+    <div class="fg"><label>NOMBRE / DESCRIPCIÓN *</label><input class="inp" id="f-nom" placeholder="Instalación red fibra óptica..."></div>
+    <div class="fg"><label>SITIO / DIRECCIÓN</label><input class="inp" id="f-sit"></div>
+    <div class="fg"><label>ALCANCE TÉCNICO</label><textarea class="ta" id="f-alc" style="min-height:70px"></textarea></div>
     <div class="g2f">
       <div class="fg"><label>INICIO</label><input class="inp" type="date" id="f-ini"></div>
-      <div class="fg"><label>FIN</label><input class="inp" type="date" id="f-fin"></div>
+      <div class="fg"><label>FIN ESTIMADO</label><input class="inp" type="date" id="f-fin"></div>
     </div>
-    <div class="fg"><label>PRESUPUESTO ($)</label><input class="inp" type="number" id="f-pre"></div>
-    <div class="fg"><label>JEFE DE OBRA (técnico responsable)</label>
-      <select class="sel" id="f-jef">
-        <option value="">— sin asignar —</option>${tecOpts}
-      </select>
+    <div class="fg"><label>PRESUPUESTO ($)</label><input class="inp" type="number" id="f-pre" placeholder="0"></div>
+    <div class="fg">
+      <label>JEFE DE OBRA *</label>
+      <select class="sel" id="f-jef">${tecOpts}</select>
     </div>
-    <div class="fg"><label>TÉCNICOS ADICIONALES (ctrl+click para varios)</label>
-      <select class="sel" id="f-tecs" multiple style="min-height:90px">
-        ${tecOpts}
-      </select>
-      <span class="xs mu" style="margin-top:3px">Mantené Ctrl (o Cmd en Mac) para seleccionar varios</span>
+    <div class="fg">
+      <label>TÉCNICOS ADICIONALES</label>
+      <div id="f-tecs-checks" style="display:flex;flex-wrap:wrap;gap:8px;padding:8px;background:var(--card2);border:1px solid var(--border2);border-radius:8px;min-height:44px">
+        ${S._tecnicos.map(t=>`<label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;white-space:nowrap">
+          <input type="checkbox" value="${t.nombre||t.tecnico_id}" style="width:14px;height:14px"> ${t.nombre||t.tecnico_id}
+        </label>`).join("")}
+        ${S._tecnicos.length===0?`<span class="xs mu">Sin técnicos registrados</span>`:""}
+      </div>
     </div>
-    <button class="btn btn-p btn-bl" onclick="saveObra()">Emitir OIO</button>`);
+    <button class="btn btn-p btn-bl" onclick="saveObra()">Emitir OT</button>`);
+
+  // Generar código inicial si ya hay obras
+  generarCodigoObra("");
+}
+
+function extraerIniciales(nombre){
+  if(!nombre)return"XX";
+  const palabras=nombre.trim().toUpperCase().replace(/[^A-Z0-9 ]/g,"").split(/\s+/).filter(p=>p.length>0);
+  if(palabras.length===1)return palabras[0].substring(0,2).padEnd(2,"X");
+  return (palabras[0].charAt(0)+palabras[1].charAt(0));
+}
+
+function generarCodigoObra(cliente){
+  const ini=extraerIniciales(cliente||g("f-cli"));
+  // Buscar el próximo número disponible en obras existentes
+  const existentes=S.obras.filter(o=>o.obra_id&&o.obra_id.startsWith("OT-"+ini+"-"));
+  const nums=existentes.map(o=>{const p=o.obra_id.split("-");return parseInt(p[p.length-1])||0;}).filter(n=>!isNaN(n));
+  const siguiente=(nums.length?Math.max(...nums):0)+1;
+  const codigo="OT-"+ini+"-"+String(siguiente).padStart(4,"0");
+  const inp=document.getElementById("f-oid");
+  if(inp)inp.value=codigo;
+  return codigo;
+}
+
+function regenerarCodigoObra(){
+  const cliente=el("f-cli-sel")?.value||g("f-cli")||"";
+  generarCodigoObra(cliente);
+}
+
+function onClienteObra(valor){
+  if(!valor)return;
+  // Sync text input
+  const txt=document.getElementById("f-cli");
+  if(txt)txt.value=valor;
+  generarCodigoObra(valor);
+}
+
+function onClienteObraTexto(valor){
+  if(!valor)return;
+  // Sync select if matches
+  const sel=document.getElementById("f-cli-sel");
+  if(sel){
+    for(let i=0;i<sel.options.length;i++){
+      if(sel.options[i].value.toLowerCase()===valor.toLowerCase()){sel.selectedIndex=i;break;}
+    }
+  }
+  generarCodigoObra(valor);
 }
 async function saveObra(){
   // Cliente: prioritize select, fallback to text input
-  const cliSel=el("f-cli-sel"),cliTxt=g("f-cli");
-  const cliente=cliSel?.value||cliTxt||"";
-  // Tecnicos adicionales: collect multi-select
-  const tecsSel=el("f-tecs");
-  const tecsAdicionales=tecsSel?Array.from(tecsSel.selectedOptions).map(o=>o.value).filter(v=>v):[];
+  const cliSel=el("f-cli-sel");
+  const cliente=cliSel?.value||g("f-cli")||"";
+  // Jefe de obra
+  const jefe=g("f-jef")||"";
+  // Técnicos adicionales: collect checkboxes
+  const tecsAdicionales=Array.from(
+    document.querySelectorAll("#f-tecs-checks input[type=checkbox]:checked")
+  ).map(cb=>cb.value).filter(v=>v&&v!==jefe);
+  // Código de obra
+  const obraId=g("f-oid")||generarCodigoObra(cliente);
   const body={
-    obra_id:g("f-oid"),cliente,nombre_obra:g("f-nom"),sitio:g("f-sit"),
-    alcance_tecnico:g("f-alc"),fecha_inicio_est:g("f-ini"),fecha_fin_est:g("f-fin"),
-    presupuesto:g("f-pre"),jefe_obra:g("f-jef"),
+    obra_id:obraId, cliente, nombre_obra:g("f-nom"), sitio:g("f-sit"),
+    alcance_tecnico:g("f-alc"), fecha_inicio_est:g("f-ini"), fecha_fin_est:g("f-fin"),
+    presupuesto:g("f-pre"), jefe_obra:jefe,
     tecnicos_asignados:JSON.stringify(tecsAdicionales),
     emitida_por:S.user.nombre
   };
   if(!body.cliente||!body.nombre_obra){toast("Completá cliente y nombre");return;}
-  try{await api("createObra",body);closeModal();toast("✓ OIO creada");loadObras();}
+  try{await api("createObra",body);closeModal();toast("✓ OT creada: "+obraId);loadObras();}
   catch(e){toast("Error: "+e.message);}
 }
 
