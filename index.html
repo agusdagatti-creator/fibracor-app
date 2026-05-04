@@ -476,6 +476,12 @@ function renderObras(){
   const f=chip?.dataset.filter||"";
   renderObrasItems(f?S.obras.filter(o=>o.estado===f):S.obras);
 }
+function resolverNombreTec(idOrNombre){
+  if(!idOrNombre)return "";
+  if(!S._tecnicos||!S._tecnicos.length)return idOrNombre;
+  const t=S._tecnicos.find(t=>t.tecnico_id===idOrNombre||t.nombre===idOrNombre);
+  return t?t.nombre:idOrNombre;
+}
 function renderObrasItems(lista){
   const dEl=el("d-obras");
   if(!lista.length){dEl.innerHTML=`<div class="loader" style="padding:40px"><span class="mu">Sin obras</span></div>`;return;}
@@ -490,7 +496,7 @@ function renderObrasItems(lista){
         <span class="badge ${ec[o.estado]||"b-gray"}">${o.estado||""}</span>
       </div>
       <div class="sm mu mb8" data-accion="ver-obra" style="cursor:pointer">${o.nombre_obra||""}</div>
-      <div class="flex between xs mu mb8"><span>👷 ${o.jefe_obra||"Sin asignar"}</span><span>Etapa ${o.etapa_actual||0}/8</span></div>
+      <div class="flex between xs mu mb8"><span>👷 ${resolverNombreTec(o.jefe_obra)||o.jefe_obra||"Sin asignar"}</span><span>Etapa ${o.etapa_actual||0}/8</span></div>
       ${parseFloat(o.presupuesto)>0?`<div class="pb mb8"><div class="pf" style="width:${pct}%;background:var(--ac)"></div></div>`:""}
       <div class="flex gap8 wrap">
         <button class="btn btn-gh btn-xs" data-accion="ver-obra">👁 Ver</button>
@@ -552,7 +558,8 @@ async function modalObra(){
   // Opciones de clientes
   const cliOpts=S.clientes.map(c=>`<option value="${c.razon_social}">${c.razon_social}${c.ciudad?" — "+c.ciudad:""}</option>`).join("");
   // Opciones de técnicos
-  const tecOpts=`<option value="">— sin asignar —</option>`+S._tecnicos.map(t=>`<option value="${t.nombre||t.tecnico_id}">${t.nombre||t.tecnico_id}</option>`).join("");
+  // Use tecnico_id as value to avoid encoding issues with names
+  const tecOpts=`<option value="">— sin asignar —</option>`+S._tecnicos.map(t=>`<option value="${t.tecnico_id}">${t.nombre||t.tecnico_id}</option>`).join("");
 
   showModal(`<button class="mo-x" onclick="closeModal()">✕</button>
     <div class="mo-t">Nueva Orden de Trabajo</div>
@@ -586,7 +593,7 @@ async function modalObra(){
       <label>TÉCNICOS ADICIONALES</label>
       <div id="f-tecs-checks" style="display:flex;flex-wrap:wrap;gap:8px;padding:8px;background:var(--card2);border:1px solid var(--border2);border-radius:8px;min-height:44px">
         ${S._tecnicos.map(t=>`<label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;white-space:nowrap">
-          <input type="checkbox" value="${t.nombre||t.tecnico_id}" style="width:14px;height:14px"> ${t.nombre||t.tecnico_id}
+          <input type="checkbox" value="${t.tecnico_id}" style="width:14px;height:14px"> ${t.nombre||t.tecnico_id}
         </label>`).join("")}
         ${S._tecnicos.length===0?`<span class="xs mu">Sin técnicos registrados</span>`:""}
       </div>
@@ -665,6 +672,15 @@ async function saveObra(){
 }
 
 function modalEditarObra(o){
+  if(!S._tecnicos){api("getTecnicos").then(d=>{S._tecnicos=d.tecnicos||[];modalEditarObra(o);}).catch(()=>{S._tecnicos=[];modalEditarObra(o);});return;}
+  const tecOpts2=`<option value="">— sin asignar —</option>`+S._tecnicos.map(t=>`<option value="${t.tecnico_id}"${(o.jefe_obra===t.tecnico_id||o.jefe_obra===t.nombre)?" selected":""}>${t.nombre||t.tecnico_id}</option>`).join("");
+  // Parse tecnicos asignados
+  let asigActual=[];
+  try{asigActual=JSON.parse(o.tecnicos_asignados||"[]");}catch(e){if(o.tecnicos_asignados)asigActual=[o.tecnicos_asignados];}
+  const tecChecks=S._tecnicos.map(t=>{
+    const checked=asigActual.includes(t.tecnico_id)||asigActual.includes(t.nombre);
+    return `<label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;white-space:nowrap"><input type="checkbox" class="eo-tec-cb" value="${t.tecnico_id}"${checked?" checked":""}> ${t.nombre||t.tecnico_id}</label>`;
+  }).join("");
   showModal(`<button class="mo-x" onclick="closeModal()">✕</button>
     <div class="mo-t">Editar — ${o.obra_id}</div>
     <div class="fg"><label>CLIENTE</label><input class="inp" id="eo-cli" value="${o.cliente||""}"></div>
@@ -674,6 +690,10 @@ function modalEditarObra(o){
     <div class="g2f"><div class="fg"><label>INICIO</label><input class="inp" type="date" id="eo-ini" value="${o.fecha_inicio_est||""}"></div>
     <div class="fg"><label>FIN</label><input class="inp" type="date" id="eo-fin" value="${o.fecha_fin_est||""}"></div></div>
     <div class="fg"><label>PRESUPUESTO ($)</label><input class="inp" type="number" id="eo-pre" value="${o.presupuesto||""}"></div>
+    <div class="fg"><label>JEFE DE OBRA</label><select class="sel" id="eo-jef">${tecOpts2}</select></div>
+    <div class="fg"><label>TÉCNICOS ADICIONALES</label>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;padding:8px;background:var(--card2);border:1px solid var(--border2);border-radius:8px">${tecChecks||"<span class='xs mu'>Sin técnicos registrados</span>"}</div>
+    </div>
     <button class="btn btn-p btn-bl" onclick="saveEditarObra('${o.obra_id}')">Guardar</button>`);
 }
 async function modalEditarObraById(id){
@@ -682,7 +702,9 @@ async function modalEditarObraById(id){
   else{try{const d=await api("getObraDetalle",{obra_id:id});modalEditarObra(d.obra);}catch(e){toast("Error: "+e.message);}}
 }
 async function saveEditarObra(id){
-  const body={obra_id:id,cliente:g("eo-cli"),nombre_obra:g("eo-nom"),sitio:g("eo-sit"),alcance_tecnico:g("eo-alc"),fecha_inicio_est:g("eo-ini"),fecha_fin_est:g("eo-fin"),presupuesto:g("eo-pre")};
+  const jefe=g("eo-jef")||"";
+  const tecsAd=Array.from(document.querySelectorAll(".eo-tec-cb:checked")).map(cb=>cb.value).filter(v=>v&&v!==jefe);
+  const body={obra_id:id,cliente:g("eo-cli"),nombre_obra:g("eo-nom"),sitio:g("eo-sit"),alcance_tecnico:g("eo-alc"),fecha_inicio_est:g("eo-ini"),fecha_fin_est:g("eo-fin"),presupuesto:g("eo-pre"),jefe_obra:jefe,tecnicos_asignados:JSON.stringify(tecsAd)};
   try{await api("editarObra",body);closeModal();toast("✓ Obra actualizada");loadObras();}catch(e){toast("Error: "+e.message);}
 }
 
@@ -1682,24 +1704,28 @@ async function loadMT(){
       .replace(/[áàäâ]/g,"a").replace(/[éèëê]/g,"e")
       .replace(/[íìïî]/g,"i").replace(/[óòöô]/g,"o")
       .replace(/[úùüû]/g,"u").replace(/[ñ]/g,"n").replace(/\?/g,"").trim();
-    const nombreUser=S.user.nombre||"";
     const idUser=S.user.user_id||"";
-    const normNombre=normStr(nombreUser);
+    const nombreUser=S.user.nombre||"";
+    // Primary: match by user_id (no encoding issues)
+    // Secondary: match by name (normalized, handles encoding differences)
+    const normStr2=str=>String(str||"").toLowerCase().replace(/[^a-z0-9 ]/g,"").replace(/\s+/g," ").trim();
     const misObras=todasObras.filter(o=>{
-      // Jefe de obra - comparar normalizado
-      if(o.jefe_obra&&(
-        normStr(o.jefe_obra)===normNombre ||
-        String(o.jefe_obra)===idUser
-      )) return true;
+      // Jefe de obra
+      if(o.jefe_obra){
+        if(o.jefe_obra===idUser) return true;
+        if(normStr2(o.jefe_obra)===normStr2(nombreUser)&&nombreUser) return true;
+      }
       // Técnico adicional asignado
       if(o.tecnicos_asignados){
         const asig=String(o.tecnicos_asignados);
-        if(normStr(asig).indexOf(normNombre)>=0) return true;
-        if(idUser&&asig.indexOf(idUser)>=0) return true;
-        // Parsear JSON array
+        // Check user_id directly
+        if(asig.indexOf(idUser)>=0) return true;
+        // Check name normalized
+        if(nombreUser&&normStr2(asig).indexOf(normStr2(nombreUser))>=0) return true;
+        // Parse JSON array
         try{
           const arr=JSON.parse(asig);
-          if(arr.some(v=>normStr(v)===normNombre||String(v)===idUser)) return true;
+          if(arr.some(v=>String(v)===idUser||(nombreUser&&normStr2(String(v))===normStr2(nombreUser)))) return true;
         }catch(e){}
       }
       return false;
