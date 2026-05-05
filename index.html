@@ -1196,8 +1196,24 @@ async function verCliente(id){
       h+=`</div>`;
     }
     if(d.trazabilidad?.length){
-      h+=`<div class="card"><div class="ct">📜 Actividad reciente</div>`;
+      h+=`<div class="card mb12"><div class="ct">📜 Actividad reciente</div>`;
       d.trazabilidad.slice(0,8).forEach(t=>{h+=`<div style="padding:6px 0;border-bottom:1px solid var(--border)"><div class="flex between xs"><span class="badge b-gray">${t.evento||""}</span><span class="mu">${t.timestamp||""}</span></div><div class="xs mu mt4">${t.detalle||""}</div></div>`;});
+      h+=`</div>`;
+    }
+    // Reportes de técnicos en obras del cliente
+    if(d.reportes?.length){
+      const tc={avance:"b-green",pendiente:"b-amber",solicitud:"b-blue",problema:"b-red"};
+      h+=`<div class="card"><div class="ct">📋 Reportes de obra (${d.reportes.length})</div>`;
+      // Group by obra
+      const byObra={};
+      d.reportes.forEach(r=>{if(!byObra[r.obra_id])byObra[r.obra_id]=[];byObra[r.obra_id].push(r);});
+      Object.entries(byObra).slice(0,3).forEach(([obraId,reps])=>{
+        h+=`<div class="mb8"><div class="xs mu bold mb4">🏗 ${obraId} (${reps.length} reporte${reps.length>1?"s":""})</div>`;
+        reps.slice(0,3).forEach(r=>{
+          h+=`<div class="rcard mb4"><div class="flex between xs mb4"><span class="badge ${tc[r.tipo]||"b-gray"}">${r.tipo}</span><span class="mu">${r.fecha||""}</span></div><div class="xs">${r.descripcion||""}</div></div>`;
+        });
+        h+=`</div>`;
+      });
       h+=`</div>`;
     }
     showModal(h);
@@ -1697,88 +1713,226 @@ async function saveAsignarTecnico(tecId){
 async function loadMT(){
   el("d-mt").innerHTML=ldr();
   try{
-    const [dO,dR]=await Promise.all([api("getObras"),api("getReportesTecnico",{tecnico_id:S.user.user_id})]);
+    const [dO,dR]=await Promise.all([
+      api("getObras"),
+      api("getReportesTecnico",{tecnico_id:S.user.user_id})
+    ]);
     const todasObras=dO.obras||[];
-    // Normalizar nombre para comparar sin importar acentos o encoding
-    const normStr=str=>String(str||"").toLowerCase()
-      .replace(/[áàäâ]/g,"a").replace(/[éèëê]/g,"e")
-      .replace(/[íìïî]/g,"i").replace(/[óòöô]/g,"o")
-      .replace(/[úùüû]/g,"u").replace(/[ñ]/g,"n").replace(/\?/g,"").trim();
     const idUser=S.user.user_id||"";
     const nombreUser=S.user.nombre||"";
-    // Primary: match by user_id (no encoding issues)
-    // Secondary: match by name (normalized, handles encoding differences)
-    const normStr2=str=>String(str||"").toLowerCase().replace(/[^a-z0-9 ]/g,"").replace(/\s+/g," ").trim();
+    const normN=str=>String(str||"").toLowerCase().replace(/[^a-z0-9 ]/g,"").replace(/\s+/g," ").trim();
+
+    // Filtrar y DEDUPLICAR por obra_id
+    const vistas=new Set();
     const misObras=todasObras.filter(o=>{
-      // Jefe de obra
-      if(o.jefe_obra){
-        if(o.jefe_obra===idUser) return true;
-        if(normStr2(o.jefe_obra)===normStr2(nombreUser)&&nombreUser) return true;
-      }
-      // Técnico adicional asignado
-      if(o.tecnicos_asignados){
+      if(vistas.has(o.obra_id))return false;
+      let match=false;
+      // Por user_id (principal - sin problemas de encoding)
+      if(o.jefe_obra===idUser)match=true;
+      // Por nombre normalizado
+      if(!match&&nombreUser&&normN(o.jefe_obra)===normN(nombreUser))match=true;
+      // Por tecnicos_asignados
+      if(!match&&o.tecnicos_asignados){
         const asig=String(o.tecnicos_asignados);
-        // Check user_id directly
-        if(asig.indexOf(idUser)>=0) return true;
-        // Check name normalized
-        if(nombreUser&&normStr2(asig).indexOf(normStr2(nombreUser))>=0) return true;
-        // Parse JSON array
-        try{
-          const arr=JSON.parse(asig);
-          if(arr.some(v=>String(v)===idUser||(nombreUser&&normStr2(String(v))===normStr2(nombreUser)))) return true;
-        }catch(e){}
+        if(asig.indexOf(idUser)>=0)match=true;
+        if(!match){
+          try{
+            const arr=JSON.parse(asig);
+            if(arr.some(v=>String(v)===idUser||(nombreUser&&normN(String(v))===normN(nombreUser))))match=true;
+          }catch(e){}
+        }
       }
-      return false;
+      if(match)vistas.add(o.obra_id);
+      return match;
     });
+
     const misRep=dR.reportes||[];
+
+    // Separar obras activas de terminadas
+    const estadosTerminados=["Cerrada","Para cierre","Eliminada"];
+    const obrasActivas=misObras.filter(o=>!estadosTerminados.includes(o.estado));
+    const obrasTerminadas=misObras.filter(o=>estadosTerminados.includes(o.estado));
+
     let h="";
-    if(misObras.length){
-      h+=`<div class="card mb12"><div class="ct">🏗 Mis obras asignadas</div>`;
-      misObras.forEach((o,i)=>{
-        const ec={"En ejecución":"b-green","Para cierre":"b-blue","Pendiente OIO":"b-amber"};
-        h+=`<div style="padding:8px 0;border-bottom:1px solid var(--border)" data-mt-obra="${i}">
-          <div class="flex between sm mb4"><span class="bold">${o.obra_id} — ${o.cliente}</span><span class="badge ${ec[o.estado]||"b-gray"}">${o.estado}</span></div>
-          <div class="xs mu mb8">${o.nombre_obra} · Etapa ${o.etapa_actual||0}/8</div>
+
+    // ── OBRAS ACTIVAS ──
+    if(obrasActivas.length){
+      h+=`<div class="card mb12"><div class="ct">🏗 Mis obras activas (${obrasActivas.length})</div>`;
+      obrasActivas.forEach((o,i)=>{
+        const ec={"En ejecución":"b-green","Pendiente OIO":"b-amber","Planificación":"b-blue"};
+        // Reportes de esta obra
+        const repsObra=misRep.filter(r=>r.obra_id===o.obra_id);
+        h+=`<div style="border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:10px" data-mt-obra="${i}">
+          <div class="flex between mb8">
+            <div><span class="bold">${o.obra_id}</span> <span class="mu">— ${o.cliente}</span></div>
+            <span class="badge ${ec[o.estado]||"b-gray"}">${o.estado}</span>
+          </div>
+          <div class="xs mu mb8">${o.nombre_obra||""} · Etapa ${o.etapa_actual||0}/8</div>
+          ${repsObra.length?`<div class="xs mu mb8">📋 ${repsObra.length} reporte${repsObra.length>1?"s":""} cargado${repsObra.length>1?"s":""}</div>`:""}
           <div class="flex gap8 wrap">
-            <button class="btn btn-p btn-xs" data-accion="reporte">📝 Reporte diario</button>
+            <button class="btn btn-p btn-xs" data-accion="reporte">📝 Reporte</button>
+            <button class="btn btn-gh btn-xs" data-accion="ver-reportes">📋 Ver historial</button>
             <button class="btn btn-warn btn-xs" data-accion="solicitar">📦 Solicitar material</button>
-            <button class="btn btn-gh btn-xs" data-accion="estado-tec">🔄 Cambiar estado</button>
-          </div></div>`;
+            <button class="btn btn-gh btn-xs" data-accion="estado-tec">🔄 Estado</button>
+          </div>
+        </div>`;
       });
       h+=`</div>`;
-      // Add delegated handler after setting innerHTML
-      setTimeout(()=>{
-        const list=el("d-mt");
-        list.addEventListener("click",e=>{
-          const accion=e.target.closest("[data-accion]")?.dataset.accion;if(!accion)return;
-          const row=e.target.closest("[data-mt-obra]");if(!row)return;
-          const o=misObras[parseInt(row.dataset.mtObra)];if(!o)return;
-          if(accion==="reporte")modalReporteDiario(o.obra_id);
-          else if(accion==="solicitar")modalSolicitarMaterial(o.obra_id);
-          else if(accion==="estado-tec")modalCambiarEstadoTecnico(o.obra_id,o.estado||"");
-        });
-      },0);
-    }else{h+=`<div class="al al-i">No tenés obras asignadas actualmente.</div>`;}
-    if(misRep.length){
-      h+=`<div class="card"><div class="ct">📋 Mis últimos reportes</div>`;
-      const tc={avance:"b-green",pendiente:"b-amber",solicitud:"b-blue",problema:"b-red"};
-      misRep.slice(0,8).forEach(r=>{h+=`<div class="rcard"><div style="display:flex;justify-content:space-between;margin-bottom:6px"><div><span class="badge ${tc[r.tipo]||"b-gray"}">${r.tipo}</span> <span class="xs mu">${r.obra_id||""}</span></div><span class="xs mu">${r.fecha||""}</span></div><div class="sm" style="color:var(--text2)">${r.descripcion||""}</div></div>`;});
+    } else {
+      h+=`<div class="al al-i mb12">No tenés obras activas asignadas actualmente.</div>`;
+    }
+
+    // ── OBRAS TERMINADAS / PARA CIERRE ──
+    if(obrasTerminadas.length){
+      h+=`<div class="card mb12">
+        <div class="ct" style="color:var(--text2)">✅ Obras finalizadas (${obrasTerminadas.length})</div>`;
+      obrasTerminadas.forEach((o,i)=>{
+        const repsObra=misRep.filter(r=>r.obra_id===o.obra_id);
+        h+=`<div style="border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:8px;opacity:.7">
+          <div class="flex between mb4">
+            <div><span class="bold">${o.obra_id}</span> <span class="mu">— ${o.cliente}</span></div>
+            <span class="badge b-gray">${o.estado}</span>
+          </div>
+          <div class="xs mu mb8">${o.nombre_obra||""}</div>
+          ${repsObra.length?`<div class="xs mu mb8">📋 ${repsObra.length} reporte${repsObra.length>1?"s":""}</div>`:""}
+          <button class="btn btn-gh btn-xs" data-accion-fin="ver-reportes" data-obra-fin="${o.obra_id}">📋 Ver historial</button>
+        </div>`;
+      });
       h+=`</div>`;
     }
+
+    // ── ÚLTIMOS REPORTES ──
+    if(misRep.length){
+      const tc={avance:"b-green",pendiente:"b-amber",solicitud:"b-blue",problema:"b-red"};
+      h+=`<div class="card"><div class="ct">📋 Mis últimos reportes</div>`;
+      misRep.slice(0,5).forEach(r=>{
+        h+=`<div class="rcard"><div style="display:flex;justify-content:space-between;margin-bottom:4px">
+          <div><span class="badge ${tc[r.tipo]||"b-gray"}">${r.tipo}</span> <span class="xs mu">${r.obra_id||""}</span></div>
+          <span class="xs mu">${r.fecha||""}</span></div>
+          <div class="sm" style="color:var(--text2)">${r.descripcion||""}</div>
+        </div>`;
+      });
+      h+=`<button class="btn btn-gh btn-sm mt8" onclick="verTodosReportes()">Ver todos mis reportes</button></div>`;
+    }
+
     el("d-mt").innerHTML=h||`<div class="mu" style="text-align:center;padding:40px">Sin actividad</div>`;
-  }catch(e){el("d-mt").innerHTML=`<div class="al al-d">${e.message}</div>`;}
+
+    // Event delegation para obras activas
+    el("d-mt").addEventListener("click",e=>{
+      // Obras activas
+      const accion=e.target.closest("[data-accion]")?.dataset.accion;
+      if(accion){
+        const row=e.target.closest("[data-mt-obra]");if(!row)return;
+        const o=obrasActivas[parseInt(row.dataset.mtObra)];if(!o)return;
+        if(accion==="reporte")modalReporteDiario(o.obra_id,o.cliente);
+        else if(accion==="ver-reportes")verHistorialObra(o.obra_id,o.cliente,misRep);
+        else if(accion==="solicitar")modalSolicitarMaterial(o.obra_id);
+        else if(accion==="estado-tec")modalCambiarEstadoTecnico(o.obra_id,o.estado||"");
+      }
+      // Obras terminadas
+      const btn=e.target.closest("[data-accion-fin]");
+      if(btn){
+        const obraId=btn.dataset.obraFin;
+        const o=obrasTerminadas.find(x=>x.obra_id===obraId);
+        if(o)verHistorialObra(o.obra_id,o.cliente,misRep);
+      }
+    },{once:true});
+
+  }catch(e){el("d-mt").innerHTML=`<div class="al al-d">${e.message}<br><button class="btn btn-p btn-sm mt8" onclick="loadMT()">Reintentar</button></div>`;}
 }
-function modalReporteDiario(obraId){
+function verHistorialObra(obraId, cliente, todosReps){
+  // Filtrar reportes de esta obra
+  const reps=(todosReps||[]).filter(r=>r.obra_id===obraId);
+  const tc={avance:"b-green",pendiente:"b-amber",solicitud:"b-blue",problema:"b-red"};
+  let h=`<button class="mo-x" onclick="closeModal()">✕</button>
+    <div class="mo-t">📋 Historial — ${obraId}</div>
+    <div class="xs mu mb12">${cliente||""}</div>`;
+  if(!reps.length){
+    h+=`<div class="al al-i">Sin reportes cargados para esta obra.</div>`;
+  } else {
+    h+=`<div style="font-size:12px;color:var(--text3);margin-bottom:8px">${reps.length} reporte${reps.length>1?"s":""}</div>`;
+    reps.forEach(r=>{
+      h+=`<div class="rcard mb8">
+        <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+          <span class="badge ${tc[r.tipo]||"b-gray"}">${r.tipo}</span>
+          <span class="xs mu">${r.fecha||""}</span>
+        </div>
+        <div class="sm mb4" style="color:var(--text)">${r.descripcion||""}</div>
+        ${r.pendientes?`<div class="xs mu">⏳ Pendiente: ${r.pendientes}</div>`:""}
+        ${r.materiales_solicitados?`<div class="xs mu">📦 Material: ${r.materiales_solicitados}</div>`:""}
+      </div>`;
+    });
+  }
+  h+=`<button class="btn btn-p btn-bl mt8" onclick="closeModal();modalReporteDiario('${obraId}','${(cliente||"").replace(/'/g,"\'")}')">+ Nuevo reporte</button>`;
+  showModal(h);
+}
+
+async function verTodosReportes(){
+  showModal(ldr());
+  try{
+    const d=await api("getReportesTecnico",{tecnico_id:S.user.user_id});
+    const reps=d.reportes||[];
+    const tc={avance:"b-green",pendiente:"b-amber",solicitud:"b-blue",problema:"b-red"};
+    // Group by obra
+    const byObra={};
+    reps.forEach(r=>{
+      if(!byObra[r.obra_id])byObra[r.obra_id]=[];
+      byObra[r.obra_id].push(r);
+    });
+    let h=`<button class="mo-x" onclick="closeModal()">✕</button>
+      <div class="mo-t">📋 Todos mis reportes</div>`;
+    if(!reps.length){h+=`<div class="al al-i">Sin reportes cargados aún.</div>`;}
+    else{
+      Object.entries(byObra).forEach(([obraId,oreps])=>{
+        h+=`<div class="card mb12">
+          <div class="ct">🏗 ${obraId} (${oreps.length} reporte${oreps.length>1?"s":""})</div>`;
+        oreps.forEach(r=>{
+          h+=`<div class="rcard mb8">
+            <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+              <span class="badge ${tc[r.tipo]||"b-gray"}">${r.tipo}</span>
+              <span class="xs mu">${r.fecha||""}</span>
+            </div>
+            <div class="sm" style="color:var(--text)">${r.descripcion||""}</div>
+            ${r.pendientes?`<div class="xs mu mt4">⏳ ${r.pendientes}</div>`:""}
+          </div>`;
+        });
+        h+=`</div>`;
+      });
+    }
+    showModal(h);
+  }catch(e){showModal(`<button class="mo-x" onclick="closeModal()">✕</button><div class="al al-d">${e.message}</div>`);}
+}
+
+function modalReporteDiario(obraId,cliente){
   showModal(`<button class="mo-x" onclick="closeModal()">✕</button>
-    <div class="mo-t">Reporte diario — ${obraId}</div>
-    <div class="fg"><label>TIPO</label><select class="sel" id="rd-tipo"><option value="avance">Avance realizado</option><option value="pendiente">Trabajo pendiente</option><option value="problema">Problema / inconveniente</option></select></div>
-    <div class="fg"><label>DESCRIPCIÓN *</label><textarea class="ta" id="rd-desc" placeholder="Describí lo que hiciste hoy..."></textarea></div>
-    <div class="fg"><label>PENDIENTES PARA MAÑANA</label><textarea class="ta" id="rd-pend" style="min-height:60px" placeholder="Lo que queda por hacer..."></textarea></div>
-    <button class="btn btn-p btn-bl" onclick="saveReporteDiario('${obraId}')">Enviar reporte</button>`);
+    <div class="mo-t">📝 Nuevo reporte</div>
+    <div class="xs mu mb12">Obra: ${obraId}${cliente?" — "+cliente:""}</div>
+    <div class="fg"><label>TIPO</label>
+    <select class="sel" id="rd-tipo">
+      <option value="avance">✅ Avance realizado</option>
+      <option value="pendiente">⏳ Trabajo pendiente</option>
+      <option value="problema">⚠ Problema / inconveniente</option>
+    </select></div>
+    <div class="fg"><label>DESCRIPCIÓN *</label>
+    <textarea class="ta" id="rd-desc" placeholder="Describí lo que se hizo hoy en detalle..."></textarea></div>
+    <div class="fg"><label>PENDIENTES PARA MAÑANA (opcional)</label>
+    <textarea class="ta" id="rd-pend" style="min-height:60px" placeholder="Lo que queda por hacer..."></textarea></div>
+    <div class="fg"><label>FOTOS / ADJUNTOS (descripción)</label>
+    <input class="inp" id="rd-fotos" placeholder="Ej: Se tomaron fotos de la instalación del rack..."></div>
+    <button class="btn btn-p btn-bl" onclick="saveReporteDiario('${obraId}')">📤 Enviar reporte</button>
+    <button class="btn btn-gh btn-bl mt8" onclick="closeModal();verHistorialObra('${obraId}','${(cliente||"").replace(/'/g,"\'")}',[])">📋 Ver historial de esta obra</button>`);
 }
 async function saveReporteDiario(obraId){
   if(!g("rd-desc")){toast("Describí el avance");return;}
-  try{await api("subirReporte",{obra_id:obraId,tipo:g("rd-tipo"),descripcion:g("rd-desc"),pendientes:g("rd-pend")});closeModal();toast("✓ Reporte enviado");loadMT();}catch(e){toast("Error: "+e.message);}
+  try{
+    await api("subirReporte",{
+      obra_id:obraId,tipo:g("rd-tipo"),
+      descripcion:g("rd-desc"),
+      pendientes:g("rd-pend"),
+      fotos:g("rd-fotos")||""
+    });
+    closeModal();toast("✓ Reporte enviado");loadMT();
+  }catch(e){toast("Error: "+e.message);}
 }
 function modalSolicitarMaterial(obraId){
   const items=S.inv.map(i=>`<option value="${i.item_id}">${i.descripcion} (${i.item_id}) — Stock: ${i.stock_disponible}</option>`).join("");
@@ -1797,15 +1951,24 @@ async function saveSolicitarMaterial(obraId){
   try{await api("subirReporte",body);closeModal();toast("✓ Solicitud enviada a pañol");}catch(e){toast("Error: "+e.message);}
 }
 function modalCambiarEstadoTecnico(obraId,ea){
-  const es=["En ejecución","Para cierre"];
+  const es=["En ejecución","Para cierre","Cerrada"];
   showModal(`<button class="mo-x" onclick="closeModal()">✕</button>
-    <div class="mo-t">Actualizar estado — ${obraId}</div>
-    <div class="al al-i">Como técnico podés reportar el estado de avance.</div>
-    <div class="fg"><label>NUEVO ESTADO</label><select class="sel" id="te-est">${es.map(e=>`<option${e===ea?" selected":""}>${e}</option>`).join("")}</select></div>
-    <div class="fg"><label>COMENTARIO</label><input class="inp" id="te-obs" placeholder="Motivo..."></div>
-    <button class="btn btn-p btn-bl" onclick="saveCambiarEstadoTecnico('${obraId}')">Actualizar</button>`);
+    <div class="mo-t">Cambiar estado — ${obraId}</div>
+    <div class="al al-i">Al marcar "Cerrada" la obra pasará a tus finalizadas.</div>
+    <div class="fg"><label>NUEVO ESTADO</label>
+    <select class="sel" id="te-est">${es.map(e=>`<option${e===ea?" selected":""}>${e}</option>`).join("")}</select></div>
+    <div class="fg"><label>COMENTARIO</label><input class="inp" id="te-obs" placeholder="Motivo del cambio..."></div>
+    <button class="btn btn-p btn-bl" onclick="saveCambiarEstadoTecnico('${obraId}')">Actualizar estado</button>`);
 }
-async function saveCambiarEstadoTecnico(obraId){try{await api("cambiarEstadoObra",{obra_id:obraId,estado:g("te-est"),observaciones:g("te-obs")});closeModal();toast("✓ Estado actualizado");loadMT();}catch(e){toast("Error: "+e.message);}}
+async function saveCambiarEstadoTecnico(obraId){
+  const nuevoEstado=g("te-est");
+  try{
+    await api("cambiarEstadoObra",{obra_id:obraId,estado:nuevoEstado,observaciones:g("te-obs")});
+    closeModal();
+    toast("✓ Estado actualizado a: "+nuevoEstado);
+    loadMT(); // Reload - obra pasará a sección correcta
+  }catch(e){toast("Error: "+e.message);}
+}
 
 /* ── USUARIOS ───────────────────────────────────── */
 async function loadUsuarios(){
