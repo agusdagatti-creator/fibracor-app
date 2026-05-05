@@ -285,7 +285,7 @@ function api(action,params={}){
     if(S.token)url.searchParams.set("token",S.token);
     Object.entries(params).forEach(([k,v])=>{if(v!=null)url.searchParams.set(k,typeof v==="object"?JSON.stringify(v):v);});
     const sc=document.createElement("script");
-    const tm=setTimeout(()=>{cleanup();rej(new Error("Tiempo agotado"));},25000);
+    const tm=setTimeout(()=>{cleanup();rej(new Error("Tiempo agotado — verificá tu conexión"));},20000);
     window[cb]=d=>{cleanup();d.ok?res(d.data):rej(new Error(d.error||"Error"));};
     sc.onerror=()=>{cleanup();rej(new Error("Error de red"));};
     sc.src=url.toString();
@@ -300,14 +300,42 @@ async function doLogin(){
   const errEl=el("lerr"),btn=el("lbtn");
   if(!email||!pass){showErr(errEl,"Completá email y contraseña");return;}
   btn.disabled=true;btn.textContent="Verificando...";errEl.classList.add("hidden");
+  const resetBtn=()=>{btn.disabled=false;btn.textContent="Ingresar al sistema";};
   try{
     const d=await api("login",{email,password:pass});
     S.token=d.token;S.user=d.user;
-    localStorage.setItem("fc_t",d.token);localStorage.setItem("fc_u",JSON.stringify(d.user));
+    // Reset all stale cache from previous session
+    S.obras=[];S.inv=[];S.compras=[];S.clientes=[];S.proveedores=[];S.remitos=[];S._costos=[];
+    S._tecnicos=null;S._aprobadores=null;S._usuariosData=null;
+    // sessionStorage per tab - no cross-tab contamination
+    sessionStorage.setItem("fc_t",d.token);
+    sessionStorage.setItem("fc_u",JSON.stringify(d.user));
+    try{localStorage.setItem("fc_t",d.token);localStorage.setItem("fc_u",JSON.stringify(d.user));}catch(e){}
     startApp();
-  }catch(e){showErr(errEl,e.message);btn.disabled=false;btn.textContent="Ingresar al sistema";}
+  }catch(e){
+    showErr(errEl,e.message||"Error de conexión");
+    resetBtn();
+  }
 }
-function doLogout(){S.token=null;S.user=null;localStorage.removeItem("fc_t");localStorage.removeItem("fc_u");el("sa").style.display="none";el("sl").style.display="flex";}
+function doLogout(){
+  // Reset ALL state
+  S.token=null;S.user=null;
+  S.obras=[];S.inv=[];S.compras=[];S.clientes=[];S.proveedores=[];S.remitos=[];S._costos=[];
+  S._tecnicos=null;S._aprobadores=null;S._usuariosData=null;
+  // Clear both storages
+  sessionStorage.removeItem("fc_t");sessionStorage.removeItem("fc_u");
+  try{localStorage.removeItem("fc_t");localStorage.removeItem("fc_u");}catch(e){}
+  // Reset UI
+  el("sa").style.display="none";
+  el("sl").style.display="flex";
+  // Reset login form completely
+  const lbtn=el("lbtn");
+  if(lbtn){lbtn.disabled=false;lbtn.textContent="Ingresar al sistema";}
+  el("lerr").classList.add("hidden");
+  el("lemail").value="";
+  el("lpass").value="";
+  el("lpass").focus();
+}
 el("lpass").addEventListener("keydown",e=>{if(e.key==="Enter")doLogin();});
 
 /* ── APP INIT ───────────────────────────────────── */
@@ -553,7 +581,12 @@ async function verObra(id){
 async function modalObra(){
   // Asegurar clientes y tecnicos cargados
   if(!S.clientes.length){try{const d=await api("getClientes");S.clientes=d.clientes||[];}catch(e){}}
-  if(!S._tecnicos){try{const d=await api("getTecnicos");S._tecnicos=d.tecnicos||[];}catch(e){S._tecnicos=[];}}
+  if(!S._tecnicos||!S._tecnicos.length){
+    try{
+      const d=await api("getTecnicos");
+      S._tecnicos=d.tecnicos||[];
+    }catch(e){S._tecnicos=[];}
+  }
 
   // Opciones de clientes
   const cliOpts=S.clientes.map(c=>`<option value="${c.razon_social}">${c.razon_social}${c.ciudad?" — "+c.ciudad:""}</option>`).join("");
@@ -1632,8 +1665,10 @@ async function saveEditarCosto(id){try{await api("editarCosto",{costo_id:id,conc
 /* ── TÉCNICOS ───────────────────────────────────── */
 async function loadTec(){
   el("d-tec").innerHTML=ldr();
+  S._tecnicos=null; // force refresh from server
   try{
     const d=await api("getTecnicos"),tecs=d.tecnicos||[],sols=d.solicitudes_pendientes||[];
+    S._tecnicos=tecs; // cache refreshed
     const ec={Disponible:"b-green","En obra":"b-amber","De viaje":"b-blue"};
     let h=`<div class="g3 mb12">
       <div class="kpi green"><div class="kl">Disponibles</div><div class="kv">${d.disponibles}</div></div>
@@ -1661,15 +1696,15 @@ async function loadTec(){
         <button class="btn btn-gh btn-xs" data-accion="asignar-tec">🏗 Asignar obra</button>
       </div>
     </div>`).join("");
-    S._tecnicos=tecs; // cache para dropdowns
+    // Replace innerHTML resets all listeners - use onclick on container
     el("d-tec").innerHTML=h;
-    el("d-tec").addEventListener("click",e=>{
+    el("d-tec").onclick=e=>{
       const accion=e.target.closest("[data-accion]")?.dataset.accion;if(!accion)return;
       const card=e.target.closest("[data-tec]");if(!card)return;
       const t=tecs[parseInt(card.dataset.tec)];if(!t)return;
       if(accion==="ver-rep")verReportesTecnico(t.tecnico_id,t.nombre||t.tecnico_id);
       else if(accion==="asignar-tec")modalAsignarTecnico(t.tecnico_id);
-    },{once:true});
+    };
   }catch(e){el("d-tec").innerHTML=`<div class="al al-d">${e.message}</div>`;}
 }
 async function verReportesTecnico(tecId,nombre){
@@ -1818,53 +1853,62 @@ async function loadMT(){
     el("d-mt").innerHTML=h||`<div class="mu" style="text-align:center;padding:40px">Sin actividad</div>`;
 
     // Event delegation para obras activas
-    el("d-mt").addEventListener("click",e=>{
+    // Use .onclick to avoid listener accumulation across reloads
+    el("d-mt").onclick=e=>{
       // Obras activas
       const accion=e.target.closest("[data-accion]")?.dataset.accion;
       if(accion){
         const row=e.target.closest("[data-mt-obra]");if(!row)return;
         const o=obrasActivas[parseInt(row.dataset.mtObra)];if(!o)return;
         if(accion==="reporte")modalReporteDiario(o.obra_id,o.cliente);
-        else if(accion==="ver-reportes")verHistorialObra(o.obra_id,o.cliente,misRep);
+        else if(accion==="ver-reportes")verHistorialObra(o.obra_id,o.cliente);
         else if(accion==="solicitar")modalSolicitarMaterial(o.obra_id);
         else if(accion==="estado-tec")modalCambiarEstadoTecnico(o.obra_id,o.estado||"");
       }
       // Obras terminadas
-      const btn=e.target.closest("[data-accion-fin]");
-      if(btn){
-        const obraId=btn.dataset.obraFin;
+      const btnFin=e.target.closest("[data-accion-fin]");
+      if(btnFin){
+        const obraId=btnFin.dataset.obraFin;
         const o=obrasTerminadas.find(x=>x.obra_id===obraId);
-        if(o)verHistorialObra(o.obra_id,o.cliente,misRep);
+        if(o)verHistorialObra(o.obra_id,o.cliente);
       }
-    },{once:true});
+    };
 
   }catch(e){el("d-mt").innerHTML=`<div class="al al-d">${e.message}<br><button class="btn btn-p btn-sm mt8" onclick="loadMT()">Reintentar</button></div>`;}
 }
-function verHistorialObra(obraId, cliente, todosReps){
-  // Filtrar reportes de esta obra
-  const reps=(todosReps||[]).filter(r=>r.obra_id===obraId);
-  const tc={avance:"b-green",pendiente:"b-amber",solicitud:"b-blue",problema:"b-red"};
-  let h=`<button class="mo-x" onclick="closeModal()">✕</button>
-    <div class="mo-t">📋 Historial — ${obraId}</div>
-    <div class="xs mu mb12">${cliente||""}</div>`;
-  if(!reps.length){
-    h+=`<div class="al al-i">Sin reportes cargados para esta obra.</div>`;
-  } else {
-    h+=`<div style="font-size:12px;color:var(--text3);margin-bottom:8px">${reps.length} reporte${reps.length>1?"s":""}</div>`;
-    reps.forEach(r=>{
-      h+=`<div class="rcard mb8">
-        <div style="display:flex;justify-content:space-between;margin-bottom:6px">
-          <span class="badge ${tc[r.tipo]||"b-gray"}">${r.tipo}</span>
-          <span class="xs mu">${r.fecha||""}</span>
-        </div>
-        <div class="sm mb4" style="color:var(--text)">${r.descripcion||""}</div>
-        ${r.pendientes?`<div class="xs mu">⏳ Pendiente: ${r.pendientes}</div>`:""}
-        ${r.materiales_solicitados?`<div class="xs mu">📦 Material: ${r.materiales_solicitados}</div>`:""}
-      </div>`;
-    });
+async function verHistorialObra(obraId, cliente){
+  // Always load fresh reports from server
+  showModal(ldr());
+  try{
+    const d=await api("getReportesTecnico",{tecnico_id:S.user.user_id,obra_id:obraId});
+    const reps=d.reportes||[];
+    const tc={avance:"b-green",pendiente:"b-amber",solicitud:"b-blue",problema:"b-red"};
+    let h=`<button class="mo-x" onclick="closeModal()">✕</button>
+      <div class="mo-t">📋 Historial de reportes</div>
+      <div class="xs mu mb12">🏗 ${obraId}${cliente?" — "+cliente:""}</div>`;
+    if(!reps.length){
+      h+=`<div class="al al-i">Sin reportes cargados para esta obra aún.</div>`;
+    } else {
+      h+=`<div class="xs mu mb12">${reps.length} reporte${reps.length>1?"s":""} cargado${reps.length>1?"s":""}</div>`;
+      reps.forEach(r=>{
+        h+=`<div class="rcard mb8">
+          <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+            <div><span class="badge ${tc[r.tipo]||"b-gray"}">${r.tipo}</span>
+            <span class="xs mu" style="margin-left:6px">${r.tecnico_nombre||""}</span></div>
+            <span class="xs mu">${r.fecha||""}</span>
+          </div>
+          <div class="sm mb4" style="color:var(--text)">${r.descripcion||""}</div>
+          ${r.pendientes?`<div class="xs mu mt4">⏳ Pendiente: ${r.pendientes}</div>`:""}
+          ${r.materiales_solicitados?`<div class="xs mu mt4">📦 Material: ${r.materiales_solicitados}</div>`:""}
+          ${r.fotos?`<div class="xs mu mt4">📷 ${r.fotos}</div>`:""}
+        </div>`;
+      });
+    }
+    h+=`<button class="btn btn-p btn-bl mt8" onclick="closeModal();modalReporteDiario('${obraId}','${(cliente||"").replace(/'/g,"\'")}')">📝 Nuevo reporte</button>`;
+    showModal(h);
+  }catch(e){
+    showModal(`<button class="mo-x" onclick="closeModal()">✕</button><div class="al al-d">${e.message}</div>`);
   }
-  h+=`<button class="btn btn-p btn-bl mt8" onclick="closeModal();modalReporteDiario('${obraId}','${(cliente||"").replace(/'/g,"\'")}')">+ Nuevo reporte</button>`;
-  showModal(h);
 }
 
 async function verTodosReportes(){
@@ -1920,10 +1964,12 @@ function modalReporteDiario(obraId,cliente){
     <div class="fg"><label>FOTOS / ADJUNTOS (descripción)</label>
     <input class="inp" id="rd-fotos" placeholder="Ej: Se tomaron fotos de la instalación del rack..."></div>
     <button class="btn btn-p btn-bl" onclick="saveReporteDiario('${obraId}')">📤 Enviar reporte</button>
-    <button class="btn btn-gh btn-bl mt8" onclick="closeModal();verHistorialObra('${obraId}','${(cliente||"").replace(/'/g,"\'")}',[])">📋 Ver historial de esta obra</button>`);
+    <button class="btn btn-gh btn-bl mt8" onclick="closeModal();verHistorialObra('${obraId}','${(cliente||"").replace(/'/g,"\'")}')">📋 Ver historial de esta obra</button>`);
 }
 async function saveReporteDiario(obraId){
   if(!g("rd-desc")){toast("Describí el avance");return;}
+  const btnSave=document.querySelector("#mc .btn-p.btn-bl");
+  if(btnSave){btnSave.disabled=true;btnSave.textContent="Enviando...";}
   try{
     await api("subirReporte",{
       obra_id:obraId,tipo:g("rd-tipo"),
@@ -1931,8 +1977,14 @@ async function saveReporteDiario(obraId){
       pendientes:g("rd-pend"),
       fotos:g("rd-fotos")||""
     });
-    closeModal();toast("✓ Reporte enviado");loadMT();
-  }catch(e){toast("Error: "+e.message);}
+    closeModal();
+    toast("✓ Reporte enviado correctamente");
+    // Refresh mis tareas in background
+    loadMT();
+  }catch(e){
+    if(btnSave){btnSave.disabled=false;btnSave.textContent="📤 Enviar reporte";}
+    toast("Error: "+e.message);
+  }
 }
 function modalSolicitarMaterial(obraId){
   const items=S.inv.map(i=>`<option value="${i.item_id}">${i.descripcion} (${i.item_id}) — Stock: ${i.stock_disponible}</option>`).join("");
@@ -2120,7 +2172,18 @@ function renderTrazaI(logs){
 
 /* ── INICIO ─────────────────────────────────────── */
 (function(){
-  const t=localStorage.getItem("fc_t"),u=localStorage.getItem("fc_u");
-  if(t&&u){try{S.token=t;S.user=JSON.parse(u);startApp();}catch(e){doLogout();}}
+  // sessionStorage first (per-tab, no cross-tab contamination), then localStorage
+  const t=sessionStorage.getItem("fc_t")||localStorage.getItem("fc_t");
+  const u=sessionStorage.getItem("fc_u")||localStorage.getItem("fc_u");
+  if(t&&u){
+    try{
+      S.token=t;
+      S.user=JSON.parse(u);
+      // Sync to sessionStorage if it came from localStorage
+      sessionStorage.setItem("fc_t",t);
+      sessionStorage.setItem("fc_u",u);
+      startApp();
+    }catch(e){doLogout();}
+  }
 })();
 </script></body></html>
