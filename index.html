@@ -2001,160 +2001,214 @@ async function saveReporteDiario(obraId){
   }
 }
 async function modalSolicitarMaterial(obraId){
-  // Asegurar inventario cargado
   if(!S.inv.length){try{const d=await api("getInventario");S.inv=d.items||[];}catch(e){}}
-
-  // Separar por categoría
-  const materiales=S.inv.filter(i=>i.categoria!=="Herramienta"&&i.categoria!=="Reutilizable");
-  const herramientas=S.inv.filter(i=>i.categoria==="Herramienta"||i.categoria==="Reutilizable");
-
-  const makeOpts=(lista)=>lista.map(i=>{
-    const stock=i.stock_disponible||0;
-    const badge=stock<=0?"⚠ Sin stock":stock<=i.stock_minimo?"⚠ Bajo":"✓";
-    return `<option value="${i.item_id}|${i.descripcion}|${i.unidad||'ud.'}">${badge} ${i.descripcion} (${i.item_id}) — ${stock} ${i.unidad||'ud.'}`;
-  }).join("");
+  window._smObraId=obraId;
+  window._smItems=[]; // lista de items a solicitar
+  window._smInv={
+    materiales:S.inv.filter(i=>i.categoria!=="Herramienta"&&i.categoria!=="Reutilizable"),
+    herramientas:S.inv.filter(i=>i.categoria==="Herramienta"||i.categoria==="Reutilizable")
+  };
 
   showModal(`<button class="mo-x" onclick="closeModal()">✕</button>
-    <div class="mo-t">📦 Solicitar material — ${obraId}</div>
-    <div class="al al-i">Esta solicitud irá a Pañol para verificar disponibilidad.</div>
+    <div class="mo-t">📦 Solicitar materiales — ${obraId}</div>
+    <div class="al al-i">Podés agregar varios ítems en una sola solicitud.</div>
 
+    <div style="background:var(--card2);border:1px solid var(--border2);border-radius:10px;padding:14px;margin-bottom:12px">
+      <div class="ct" style="margin-bottom:10px">➕ Agregar ítem</div>
+
+      <div class="fg">
+        <label>TIPO</label>
+        <select class="sel" id="sm-tipo" onchange="onTipoSolicitud()">
+          <option value="stock">Del inventario (stock)</option>
+          <option value="manual">No está en el inventario (manual)</option>
+        </select>
+      </div>
+
+      <div id="sm-stock-wrap">
+        <div class="fg">
+          <label>BUSCAR</label>
+          <input class="inp" id="sm-busca" placeholder="Escribí para filtrar..." oninput="filtrarInvSolicitud(this.value)">
+        </div>
+        <div class="g2f">
+          <div class="fg">
+            <label>MATERIALES / INSUMOS</label>
+            <select class="sel" id="sm-mat" size="4" style="height:auto" onchange="onSelInvSolicitud('mat')">
+              <option value="">— elegir —</option>
+              ${window._smInv.materiales.map(i=>`<option value="${i.item_id}|${i.descripcion}|${i.unidad||'ud.'}">${i.stock_disponible<=0?"⚠":"✓"} ${i.descripcion} — ${i.stock_disponible} ${i.unidad||'ud.'}</option>`).join("")}
+            </select>
+          </div>
+          <div class="fg">
+            <label>HERRAMIENTAS</label>
+            <select class="sel" id="sm-herr" size="4" style="height:auto" onchange="onSelInvSolicitud('herr')">
+              <option value="">— elegir —</option>
+              ${window._smInv.herramientas.map(i=>`<option value="${i.item_id}|${i.descripcion}|${i.unidad||'ud.'}">${i.stock_disponible<=0?"⚠":"✓"} ${i.descripcion} — ${i.stock_disponible} ${i.unidad||'ud.'}</option>`).join("")}
+            </select>
+          </div>
+        </div>
+        <div class="fg">
+          <label>ÍTEM SELECCIONADO</label>
+          <input class="inp" id="sm-it-desc" readonly placeholder="Seleccioná del inventario arriba...">
+          <input type="hidden" id="sm-it-id">
+        </div>
+      </div>
+
+      <div id="sm-manual-wrap" class="hidden">
+        <div class="fg">
+          <label>DESCRIPCIÓN *</label>
+          <input class="inp" id="sm-manual" placeholder="Ej: Cable UTP cat 6 azul, Taladro percutor...">
+        </div>
+      </div>
+
+      <div class="g2f">
+        <div class="fg"><label>CANTIDAD *</label><input class="inp" type="number" id="sm-ca" min="0.01" step="0.01" value="1"></div>
+        <div class="fg"><label>UNIDAD</label><input class="inp" id="sm-uni" placeholder="m, ud., kg..."></div>
+      </div>
+      <div class="fg">
+        <label>OBSERVACIÓN (opcional)</label>
+        <input class="inp" id="sm-obs-item" placeholder="Color, marca, especificación...">
+      </div>
+      <button class="btn btn-g btn-bl" onclick="agregarItemSolicitud()">+ Agregar a la lista</button>
+    </div>
+
+    <div id="sm-lista-wrap" class="hidden">
+      <div class="ct">📋 Ítems a solicitar</div>
+      <div id="sm-lista"></div>
+    </div>
+
+    <div class="fg mt8">
+      <label>MOTIVO / PARA QUÉ SE USAN</label>
+      <textarea class="ta" id="sm-desc" style="min-height:55px" placeholder="Para qué se necesitan estos materiales en la obra..."></textarea>
+    </div>
     <div class="fg">
-      <label>TIPO DE SOLICITUD</label>
-      <select class="sel" id="sm-tipo" onchange="onTipoSolicitud()">
-        <option value="stock">Del inventario (stock)</option>
-        <option value="manual">Material/herramienta sin stock (ingreso manual)</option>
-      </select>
-    </div>
-
-    <div id="sm-stock-wrap">
-      <div class="fg">
-        <label>BUSCAR EN EL INVENTARIO</label>
-        <input class="inp" id="sm-busca" placeholder="Escribí para buscar..." oninput="filtrarInvSolicitud(this.value)">
-      </div>
-      <div class="fg">
-        <label>MATERIALES / INSUMOS</label>
-        <select class="sel" id="sm-mat" size="4" style="height:auto" onchange="onSelInvSolicitud('mat')">
-          <option value="">— elegir material —</option>${makeOpts(materiales)}
-        </select>
-      </div>
-      <div class="fg">
-        <label>HERRAMIENTAS / EQUIPOS</label>
-        <select class="sel" id="sm-herr" size="4" style="height:auto" onchange="onSelInvSolicitud('herr')">
-          <option value="">— elegir herramienta —</option>${makeOpts(herramientas)}
-        </select>
-      </div>
-      <div class="fg">
-        <label>ÍTEM SELECCIONADO</label>
-        <input class="inp" id="sm-it-desc" readonly placeholder="Seleccioná del inventario arriba...">
-        <input type="hidden" id="sm-it-id">
-      </div>
-    </div>
-
-    <div id="sm-manual-wrap" class="hidden">
-      <div class="fg">
-        <label>DESCRIPCIÓN DEL MATERIAL / HERRAMIENTA *</label>
-        <input class="inp" id="sm-manual" placeholder="Ej: Cable UTP cat 6 azul, Taladro percutor...">
-      </div>
-    </div>
-
-    <div class="g2f">
-      <div class="fg"><label>CANTIDAD *</label><input class="inp" type="number" id="sm-ca" min="0.01" step="0.01" value="1"></div>
-      <div class="fg"><label>UNIDAD</label><input class="inp" id="sm-uni" placeholder="m, ud., kg..."></div>
-    </div>
-    <div class="fg"><label>MOTIVO / PARA QUÉ SE USA</label>
-      <textarea class="ta" id="sm-desc" style="min-height:60px" placeholder="Describí para qué lo necesitás y en qué parte de la obra..."></textarea>
-    </div>
-    <div class="fg"><label>URGENCIA</label>
+      <label>URGENCIA</label>
       <select class="sel" id="sm-urg">
         <option value="Normal">Normal — puede esperar</option>
         <option value="Alta">Alta — necesario pronto</option>
         <option value="Urgente">Urgente — obra parada</option>
       </select>
     </div>
-    <button class="btn btn-p btn-bl" onclick="saveSolicitarMaterial('${obraId}')">📤 Enviar a pañol</button>`);
-
-  // Store full inventory for filtering
-  window._smInv={materiales, herramientas, all:S.inv};
+    <button class="btn btn-p btn-bl" onclick="saveSolicitarMaterial('${obraId}')">📤 Enviar solicitud a pañol</button>`);
 }
 
 function onTipoSolicitud(){
   const tipo=document.getElementById("sm-tipo")?.value;
-  document.getElementById("sm-stock-wrap")?.classList.toggle("hidden", tipo==="manual");
-  document.getElementById("sm-manual-wrap")?.classList.toggle("hidden", tipo!=="manual");
+  document.getElementById("sm-stock-wrap")?.classList.toggle("hidden",tipo==="manual");
+  document.getElementById("sm-manual-wrap")?.classList.toggle("hidden",tipo!=="manual");
 }
 
 function filtrarInvSolicitud(q){
   const inv=window._smInv||{materiales:[],herramientas:[]};
   const ql=q.toLowerCase().trim();
-  const makeOpts=(lista)=>lista.filter(i=>
+  const makeOpts=(lista,placeholder)=>`<option value="">— ${placeholder} —</option>`+lista.filter(i=>
     !ql||i.descripcion.toLowerCase().includes(ql)||i.item_id.toLowerCase().includes(ql)
-  ).map(i=>{
-    const stock=i.stock_disponible||0;
-    const badge=stock<=0?"⚠ Sin stock":stock<=(i.stock_minimo||0)&&i.stock_minimo>0?"⚠ Bajo":"✓";
-    return `<option value="${i.item_id}|${i.descripcion}|${i.unidad||'ud.'}">${badge} ${i.descripcion} (${i.item_id}) — ${stock} ${i.unidad||'ud.'}`;
-  }).join("");
-  const matSel=document.getElementById("sm-mat");
-  const herrSel=document.getElementById("sm-herr");
-  if(matSel) matSel.innerHTML=`<option value="">— elegir material —</option>`+makeOpts(inv.materiales);
-  if(herrSel) herrSel.innerHTML=`<option value="">— elegir herramienta —</option>`+makeOpts(inv.herramientas);
+  ).map(i=>`<option value="${i.item_id}|${i.descripcion}|${i.unidad||'ud.'}">${i.stock_disponible<=0?"⚠":"✓"} ${i.descripcion} — ${i.stock_disponible} ${i.unidad||'ud.'}</option>`).join("");
+  const mat=document.getElementById("sm-mat");
+  const herr=document.getElementById("sm-herr");
+  if(mat)mat.innerHTML=makeOpts(inv.materiales,"elegir material");
+  if(herr)herr.innerHTML=makeOpts(inv.herramientas,"elegir herramienta");
 }
 
 function onSelInvSolicitud(from){
   const sel=document.getElementById(from==="mat"?"sm-mat":"sm-herr");
   const other=document.getElementById(from==="mat"?"sm-herr":"sm-mat");
-  if(!sel||!sel.value)return;
-  // Deselect the other list
+  if(!sel?.value)return;
   if(other)other.selectedIndex=0;
   const parts=sel.value.split("|");
-  const desc=parts[1]||"";
-  const uni=parts[2]||"ud.";
   const descEl=document.getElementById("sm-it-desc");
   const idEl=document.getElementById("sm-it-id");
   const uniEl=document.getElementById("sm-uni");
-  if(descEl)descEl.value=desc;
+  if(descEl)descEl.value=parts[1]||"";
   if(idEl)idEl.value=parts[0]||"";
-  if(uniEl&&!uniEl.value)uniEl.value=uni;
+  if(uniEl&&!uniEl.value)uniEl.value=parts[2]||"ud.";
 }
-async function saveSolicitarMaterial(obraId){
+
+function agregarItemSolicitud(){
   const tipo=document.getElementById("sm-tipo")?.value||"stock";
-  let itemDesc="",itemId="";
+  let desc="",itemId="",uni="";
 
   if(tipo==="manual"){
-    itemDesc=document.getElementById("sm-manual")?.value?.trim()||"";
-    if(!itemDesc){toast("Describí el material que necesitás");return;}
+    desc=document.getElementById("sm-manual")?.value?.trim()||"";
+    if(!desc){toast("Describí el ítem");return;}
   } else {
-    const descEl=document.getElementById("sm-it-desc");
-    const idEl=document.getElementById("sm-it-id");
-    itemDesc=descEl?.value?.trim()||"";
-    itemId=idEl?.value||"";
-    if(!itemDesc){toast("Seleccioná un ítem del inventario o usá 'ingreso manual'");return;}
+    desc=document.getElementById("sm-it-desc")?.value?.trim()||"";
+    itemId=document.getElementById("sm-it-id")?.value||"";
+    if(!desc){toast("Seleccioná un ítem del inventario");return;}
   }
 
   const cant=parseFloat(document.getElementById("sm-ca")?.value)||0;
   if(cant<=0){toast("Ingresá una cantidad válida");return;}
+  uni=document.getElementById("sm-uni")?.value||"ud.";
+  const obs=document.getElementById("sm-obs-item")?.value||"";
 
-  const uni=document.getElementById("sm-uni")?.value||"ud.";
+  // Add to list
+  if(!window._smItems)window._smItems=[];
+  window._smItems.push({desc,itemId,cant,uni,obs});
+
+  // Render list
+  renderListaSolicitud();
+
+  // Reset item fields
+  const fields=["sm-it-desc","sm-it-id","sm-uni","sm-obs-item","sm-manual"];
+  fields.forEach(id=>{const el=document.getElementById(id);if(el)el.value="";});
+  const sm_ca=document.getElementById("sm-ca");if(sm_ca)sm_ca.value="1";
+  const mat=document.getElementById("sm-mat");if(mat)mat.selectedIndex=0;
+  const herr=document.getElementById("sm-herr");if(herr)herr.selectedIndex=0;
+  const busca=document.getElementById("sm-busca");if(busca)busca.value="";
+  toast("✓ Ítem agregado a la lista");
+}
+
+function renderListaSolicitud(){
+  const items=window._smItems||[];
+  const wrap=document.getElementById("sm-lista-wrap");
+  const lista=document.getElementById("sm-lista");
+  if(!wrap||!lista)return;
+  if(!items.length){wrap.classList.add("hidden");return;}
+  wrap.classList.remove("hidden");
+  lista.innerHTML=items.map((it,i)=>`
+    <div style="display:flex;align-items:center;gap:8px;padding:8px;background:var(--card2);border:1px solid var(--border2);border-radius:8px;margin-bottom:6px">
+      <div style="flex:1">
+        <div class="sm bold">${it.desc}</div>
+        <div class="xs mu">${it.cant} ${it.uni}${it.obs?" · "+it.obs:""}</div>
+      </div>
+      <button class="btn btn-r btn-xs" onclick="quitarItemSolicitud(${i})">✕</button>
+    </div>`).join("");
+}
+
+function quitarItemSolicitud(idx){
+  if(window._smItems)window._smItems.splice(idx,1);
+  renderListaSolicitud();
+}
+async function saveSolicitarMaterial(obraId){
+  const items=window._smItems||[];
+  if(!items.length){toast("Agregá al menos un ítem a la lista");return;}
+
   const urg=document.getElementById("sm-urg")?.value||"Normal";
   const motivo=document.getElementById("sm-desc")?.value||"";
 
-  const body={
-    obra_id:obraId,
-    tipo:"solicitud",
-    item_solicitado:itemDesc+(itemId?" ("+itemId+")":""),
-    descripcion:motivo||itemDesc,
-    cantidad_solicitada:cant,
-    unidad:uni,
-    prioridad:urg
-  };
-
   const btn=document.querySelector("#mc .btn-p.btn-bl");
   if(btn){btn.disabled=true;btn.textContent="Enviando...";}
+
   try{
+    // Send one report per item OR a combined report
+    // Combined: list all items in item_solicitado field
+    const listaTexto=items.map((it,i)=>`${i+1}. ${it.desc} — ${it.cant} ${it.uni}${it.obs?" ("+it.obs+")":""}`).join(" | ");
+    const body={
+      obra_id:obraId,
+      tipo:"solicitud",
+      item_solicitado:listaTexto,
+      descripcion:motivo||"Solicitud de materiales/herramientas",
+      cantidad_solicitada:items.length, // total items
+      prioridad:urg,
+      items_json:JSON.stringify(items)
+    };
     await api("subirReporte",body);
+    window._smItems=[];
     closeModal();
-    toast("✓ Solicitud enviada a pañol"+(urg==="Urgente"?" — URGENTE ⚠":""));
+    const urgMsg=urg==="Urgente"?" — ⚠ URGENTE":urg==="Alta"?" — Alta prioridad":"";
+    toast("✓ Solicitud enviada ("+items.length+" ítem"+(items.length>1?"s":"")+")"+urgMsg);
+    loadMT();
   }catch(e){
-    if(btn){btn.disabled=false;btn.textContent="📤 Enviar a pañol";}
+    if(btn){btn.disabled=false;btn.textContent="📤 Enviar solicitud a pañol";}
     toast("Error: "+e.message);
   }
 }
