@@ -271,8 +271,11 @@ const g=id=>document.getElementById(id)?.value||"";
 const el=id=>document.getElementById(id);
 const ldr=()=>'<div class="loader"><div class="spin"></div></div>';
 function toast(msg){const t=el("toast");t.textContent=msg;t.classList.add("show");clearTimeout(toast._t);toast._t=setTimeout(()=>t.classList.remove("show"),3500);}
+let _modalReqId=0; // cancellation token
 function showModal(h){el("mc").innerHTML=h;el("mbg").classList.remove("hidden");}
-function closeModal(){el("mbg").classList.add("hidden");}
+function closeModal(){el("mbg").classList.add("hidden");_modalReqId++;} // increment cancels pending
+// Safe version: only shows if modal wasn't closed/replaced since request started
+function showModalSafe(h,reqId){if(reqId===_modalReqId){showModal(h);}}
 function showErr(e,msg){e.textContent=msg;e.classList.remove("hidden");}
 
 /* ── API JSONP ──────────────────────────────────── */
@@ -552,7 +555,7 @@ function renderObrasItems(lista){
 }
 
 async function verObra(id){
-  showModal(ldr());
+  const reqId=++_modalReqId;showModal(ldr());
   try{
     const d=await api("getObraDetalle",{obra_id:id}),o=d.obra;
     const ec={"En ejecución":"b-green","Pendiente OIO":"b-amber","Para cierre":"b-blue","Cerrada":"b-gray"};
@@ -858,7 +861,7 @@ function modalAjuste(id,disp,fuer,min){
 }
 async function saveAjuste(id){try{await api("ajustarStock",{item_id:id,stock_disponible:g("aj-d"),stock_fuera_servicio:g("aj-f"),stock_minimo:g("aj-m")});closeModal();toast("✓ Stock ajustado");loadInv();}catch(e){toast("Error: "+e.message);}}
 async function verHistItem(id){
-  showModal(ldr());
+  const reqId=++_modalReqId;showModal(ldr());
   try{
     const d=await api("getHistorialItem",{item_id:id}),movs=(d.movimientos||[]).slice(0,30);
     const tc={Retiro:"b-amber",Devolucion:"b-blue",Ingreso_compra:"b-green",Baja:"b-red"};
@@ -1044,7 +1047,7 @@ function modalPrecioC(id,precio){
 }
 async function savePrecioC(id){try{await api("actualizarPrecioCompra",{compra_id:id,precio_unitario:g("pc-p")});closeModal();toast("✓ Precio actualizado");loadCompras();}catch(e){toast("Error: "+e.message);}}
 async function verOC(id){
-  showModal(ldr());
+  const reqId=++_modalReqId;showModal(ldr());
   try{
     const d=await api("getOrdenCompra",{compra_id:id}),o=d.orden,vP=S.user.puede?.ver_precios;
     showModal(`<button class="mo-x" onclick="closeModal()">✕</button>
@@ -1189,7 +1192,7 @@ function renderClientes(lista){
   };
 }
 async function verCliente(id){
-  showModal(ldr());
+  const reqId=++_modalReqId;showModal(ldr());
   try{
     const d=await api("getClienteDetalle",{cliente_id:id}),c=d.cliente;
     const canRem=S.user.puede?.crear_remito,canEdit=S.user.puede?.editar_obras;
@@ -1317,7 +1320,7 @@ function renderProveedores(lista){
   };
 }
 async function verProveedor(id){
-  showModal(ldr());
+  const reqId=++_modalReqId;showModal(ldr());
   try{
     const d=await api("getProveedorDetalle",{proveedor_id:id}),p=d.proveedor,ocs=d.ordenes||[];
     const vP=S.user.puede?.ver_precios;
@@ -1419,7 +1422,7 @@ function renderRemitos(lista){
   };
 }
 async function verRemito(id){
-  showModal(ldr());
+  const reqId=++_modalReqId;showModal(ldr());
   try{
     const d=await api("getRemito",{remito_id:id}),r=d.remito,items=d.items||[];
     showModal(`<button class="mo-x" onclick="closeModal()">✕</button>
@@ -1463,7 +1466,7 @@ async function imprimirRemito(id){
   }catch(e){toast("Error: "+e.message);}
 }
 async function modalEditarRemito(id){
-  showModal(ldr());
+  const reqId=++_modalReqId;showModal(ldr());
   try{
     const d=await api("getRemito",{remito_id:id}),r=d.remito,items=d.items||[];
     let iH=items.map((it,idx)=>`<div class="flex gap8 mb8" id="rit-${idx}">
@@ -1708,7 +1711,7 @@ async function loadTec(){
   }catch(e){el("d-tec").innerHTML=`<div class="al al-d">${e.message}</div>`;}
 }
 async function verReportesTecnico(tecId,nombre){
-  showModal(ldr());
+  const reqId=++_modalReqId;showModal(ldr());
   try{
     const d=await api("getReportesTecnico",{tecnico_id:tecId}),reportes=d.reportes||[];
     const tc={avance:"b-green",pendiente:"b-amber",solicitud:"b-blue",problema:"b-red"};
@@ -1886,10 +1889,12 @@ async function loadMT(){
   }catch(e){el("d-mt").innerHTML=`<div class="al al-d">${e.message}<br><button class="btn btn-p btn-sm mt8" onclick="loadMT()">Reintentar</button></div>`;}
 }
 async function verHistorialObra(obraId, cliente){
-  // Always load fresh reports from server
+  // Capture request ID - if user closes modal before API responds, we cancel
+  const reqId=++_modalReqId;
   showModal(ldr());
   try{
     const d=await api("getReportesTecnico",{tecnico_id:S.user.user_id,obra_id:obraId});
+    if(reqId!==_modalReqId)return; // modal was closed/replaced, abort
     const reps=d.reportes||[];
     const tc={avance:"b-green",pendiente:"b-amber",solicitud:"b-blue",problema:"b-red"};
     let h=`<button class="mo-x" onclick="closeModal()">✕</button>
@@ -1914,14 +1919,14 @@ async function verHistorialObra(obraId, cliente){
       });
     }
     h+=`<button class="btn btn-p btn-bl mt8" onclick="closeModal();modalReporteDiario('${obraId}','${(cliente||"").replace(/'/g,"\'")}')">📝 Nuevo reporte</button>`;
-    showModal(h);
+    showModalSafe(h,reqId);
   }catch(e){
-    showModal(`<button class="mo-x" onclick="closeModal()">✕</button><div class="al al-d">${e.message}</div>`);
+    showModalSafe(`<button class="mo-x" onclick="closeModal()">✕</button><div class="al al-d">${e.message}</div>`,reqId);
   }
 }
 
 async function verTodosReportes(){
-  showModal(ldr());
+  const reqId=++_modalReqId;showModal(ldr());
   try{
     const d=await api("getReportesTecnico",{tecnico_id:S.user.user_id});
     const reps=d.reportes||[];
@@ -1995,21 +2000,163 @@ async function saveReporteDiario(obraId){
     toast("Error: "+e.message);
   }
 }
-function modalSolicitarMaterial(obraId){
-  const items=S.inv.map(i=>`<option value="${i.item_id}">${i.descripcion} (${i.item_id}) — Stock: ${i.stock_disponible}</option>`).join("");
+async function modalSolicitarMaterial(obraId){
+  // Asegurar inventario cargado
+  if(!S.inv.length){try{const d=await api("getInventario");S.inv=d.items||[];}catch(e){}}
+
+  // Separar por categoría
+  const materiales=S.inv.filter(i=>i.categoria!=="Herramienta"&&i.categoria!=="Reutilizable");
+  const herramientas=S.inv.filter(i=>i.categoria==="Herramienta"||i.categoria==="Reutilizable");
+
+  const makeOpts=(lista)=>lista.map(i=>{
+    const stock=i.stock_disponible||0;
+    const badge=stock<=0?"⚠ Sin stock":stock<=i.stock_minimo?"⚠ Bajo":"✓";
+    return `<option value="${i.item_id}|${i.descripcion}|${i.unidad||'ud.'}">${badge} ${i.descripcion} (${i.item_id}) — ${stock} ${i.unidad||'ud.'}`;
+  }).join("");
+
   showModal(`<button class="mo-x" onclick="closeModal()">✕</button>
-    <div class="mo-t">Solicitar material — ${obraId}</div>
+    <div class="mo-t">📦 Solicitar material — ${obraId}</div>
     <div class="al al-i">Esta solicitud irá a Pañol para verificar disponibilidad.</div>
-    <div class="fg"><label>MATERIAL *</label><select class="sel" id="sm-it"><option value="">— elegir ítem —</option>${items}</select></div>
-    <div class="fg"><label>CANTIDAD *</label><input class="inp" type="number" id="sm-ca" min="1" value="1"></div>
-    <div class="fg"><label>MOTIVO</label><textarea class="ta" id="sm-desc" style="min-height:60px" placeholder="Para qué lo necesitás..."></textarea></div>
-    <button class="btn btn-p btn-bl" onclick="saveSolicitarMaterial('${obraId}')">Enviar a pañol</button>`);
+
+    <div class="fg">
+      <label>TIPO DE SOLICITUD</label>
+      <select class="sel" id="sm-tipo" onchange="onTipoSolicitud()">
+        <option value="stock">Del inventario (stock)</option>
+        <option value="manual">Material/herramienta sin stock (ingreso manual)</option>
+      </select>
+    </div>
+
+    <div id="sm-stock-wrap">
+      <div class="fg">
+        <label>BUSCAR EN EL INVENTARIO</label>
+        <input class="inp" id="sm-busca" placeholder="Escribí para buscar..." oninput="filtrarInvSolicitud(this.value)">
+      </div>
+      <div class="fg">
+        <label>MATERIALES / INSUMOS</label>
+        <select class="sel" id="sm-mat" size="4" style="height:auto" onchange="onSelInvSolicitud('mat')">
+          <option value="">— elegir material —</option>${makeOpts(materiales)}
+        </select>
+      </div>
+      <div class="fg">
+        <label>HERRAMIENTAS / EQUIPOS</label>
+        <select class="sel" id="sm-herr" size="4" style="height:auto" onchange="onSelInvSolicitud('herr')">
+          <option value="">— elegir herramienta —</option>${makeOpts(herramientas)}
+        </select>
+      </div>
+      <div class="fg">
+        <label>ÍTEM SELECCIONADO</label>
+        <input class="inp" id="sm-it-desc" readonly placeholder="Seleccioná del inventario arriba...">
+        <input type="hidden" id="sm-it-id">
+      </div>
+    </div>
+
+    <div id="sm-manual-wrap" class="hidden">
+      <div class="fg">
+        <label>DESCRIPCIÓN DEL MATERIAL / HERRAMIENTA *</label>
+        <input class="inp" id="sm-manual" placeholder="Ej: Cable UTP cat 6 azul, Taladro percutor...">
+      </div>
+    </div>
+
+    <div class="g2f">
+      <div class="fg"><label>CANTIDAD *</label><input class="inp" type="number" id="sm-ca" min="0.01" step="0.01" value="1"></div>
+      <div class="fg"><label>UNIDAD</label><input class="inp" id="sm-uni" placeholder="m, ud., kg..."></div>
+    </div>
+    <div class="fg"><label>MOTIVO / PARA QUÉ SE USA</label>
+      <textarea class="ta" id="sm-desc" style="min-height:60px" placeholder="Describí para qué lo necesitás y en qué parte de la obra..."></textarea>
+    </div>
+    <div class="fg"><label>URGENCIA</label>
+      <select class="sel" id="sm-urg">
+        <option value="Normal">Normal — puede esperar</option>
+        <option value="Alta">Alta — necesario pronto</option>
+        <option value="Urgente">Urgente — obra parada</option>
+      </select>
+    </div>
+    <button class="btn btn-p btn-bl" onclick="saveSolicitarMaterial('${obraId}')">📤 Enviar a pañol</button>`);
+
+  // Store full inventory for filtering
+  window._smInv={materiales, herramientas, all:S.inv};
+}
+
+function onTipoSolicitud(){
+  const tipo=document.getElementById("sm-tipo")?.value;
+  document.getElementById("sm-stock-wrap")?.classList.toggle("hidden", tipo==="manual");
+  document.getElementById("sm-manual-wrap")?.classList.toggle("hidden", tipo!=="manual");
+}
+
+function filtrarInvSolicitud(q){
+  const inv=window._smInv||{materiales:[],herramientas:[]};
+  const ql=q.toLowerCase().trim();
+  const makeOpts=(lista)=>lista.filter(i=>
+    !ql||i.descripcion.toLowerCase().includes(ql)||i.item_id.toLowerCase().includes(ql)
+  ).map(i=>{
+    const stock=i.stock_disponible||0;
+    const badge=stock<=0?"⚠ Sin stock":stock<=(i.stock_minimo||0)&&i.stock_minimo>0?"⚠ Bajo":"✓";
+    return `<option value="${i.item_id}|${i.descripcion}|${i.unidad||'ud.'}">${badge} ${i.descripcion} (${i.item_id}) — ${stock} ${i.unidad||'ud.'}`;
+  }).join("");
+  const matSel=document.getElementById("sm-mat");
+  const herrSel=document.getElementById("sm-herr");
+  if(matSel) matSel.innerHTML=`<option value="">— elegir material —</option>`+makeOpts(inv.materiales);
+  if(herrSel) herrSel.innerHTML=`<option value="">— elegir herramienta —</option>`+makeOpts(inv.herramientas);
+}
+
+function onSelInvSolicitud(from){
+  const sel=document.getElementById(from==="mat"?"sm-mat":"sm-herr");
+  const other=document.getElementById(from==="mat"?"sm-herr":"sm-mat");
+  if(!sel||!sel.value)return;
+  // Deselect the other list
+  if(other)other.selectedIndex=0;
+  const parts=sel.value.split("|");
+  const desc=parts[1]||"";
+  const uni=parts[2]||"ud.";
+  const descEl=document.getElementById("sm-it-desc");
+  const idEl=document.getElementById("sm-it-id");
+  const uniEl=document.getElementById("sm-uni");
+  if(descEl)descEl.value=desc;
+  if(idEl)idEl.value=parts[0]||"";
+  if(uniEl&&!uniEl.value)uniEl.value=uni;
 }
 async function saveSolicitarMaterial(obraId){
-  const itemSel=el("sm-it");
-  const body={obra_id:obraId,tipo:"solicitud",item_solicitado:itemSel.options[itemSel.selectedIndex]?.text||g("sm-it"),descripcion:g("sm-desc"),cantidad_solicitada:g("sm-ca")};
-  if(!body.item_solicitado||body.item_solicitado==="— elegir ítem —"){toast("Seleccioná un ítem");return;}
-  try{await api("subirReporte",body);closeModal();toast("✓ Solicitud enviada a pañol");}catch(e){toast("Error: "+e.message);}
+  const tipo=document.getElementById("sm-tipo")?.value||"stock";
+  let itemDesc="",itemId="";
+
+  if(tipo==="manual"){
+    itemDesc=document.getElementById("sm-manual")?.value?.trim()||"";
+    if(!itemDesc){toast("Describí el material que necesitás");return;}
+  } else {
+    const descEl=document.getElementById("sm-it-desc");
+    const idEl=document.getElementById("sm-it-id");
+    itemDesc=descEl?.value?.trim()||"";
+    itemId=idEl?.value||"";
+    if(!itemDesc){toast("Seleccioná un ítem del inventario o usá 'ingreso manual'");return;}
+  }
+
+  const cant=parseFloat(document.getElementById("sm-ca")?.value)||0;
+  if(cant<=0){toast("Ingresá una cantidad válida");return;}
+
+  const uni=document.getElementById("sm-uni")?.value||"ud.";
+  const urg=document.getElementById("sm-urg")?.value||"Normal";
+  const motivo=document.getElementById("sm-desc")?.value||"";
+
+  const body={
+    obra_id:obraId,
+    tipo:"solicitud",
+    item_solicitado:itemDesc+(itemId?" ("+itemId+")":""),
+    descripcion:motivo||itemDesc,
+    cantidad_solicitada:cant,
+    unidad:uni,
+    prioridad:urg
+  };
+
+  const btn=document.querySelector("#mc .btn-p.btn-bl");
+  if(btn){btn.disabled=true;btn.textContent="Enviando...";}
+  try{
+    await api("subirReporte",body);
+    closeModal();
+    toast("✓ Solicitud enviada a pañol"+(urg==="Urgente"?" — URGENTE ⚠":""));
+  }catch(e){
+    if(btn){btn.disabled=false;btn.textContent="📤 Enviar a pañol";}
+    toast("Error: "+e.message);
+  }
 }
 function modalCambiarEstadoTecnico(obraId,ea){
   const es=["En ejecución","Para cierre","Cerrada"];
