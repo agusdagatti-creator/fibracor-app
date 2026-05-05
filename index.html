@@ -1797,7 +1797,12 @@ async function loadMT(){
         const ec={"En ejecución":"b-green","Pendiente OIO":"b-amber","Planificación":"b-blue"};
         // Reportes de esta obra
         const repsObra=misRep.filter(r=>r.obra_id===o.obra_id);
-        h+=`<div style="border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:10px" data-mt-obra="${i}">
+        // Store all needed data in DOM - no closure dependency
+        h+=`<div style="border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:10px"
+          data-mt-obra="${i}"
+          data-obra-id="${o.obra_id}"
+          data-cliente="${(o.cliente||"").replace(/"/g,"&quot;")}"
+          data-estado="${o.estado||""}">
           <div class="flex between mb8">
             <div><span class="bold">${o.obra_id}</span> <span class="mu">— ${o.cliente}</span></div>
             <span class="badge ${ec[o.estado]||"b-gray"}">${o.estado}</span>
@@ -1830,7 +1835,10 @@ async function loadMT(){
           </div>
           <div class="xs mu mb8">${o.nombre_obra||""}</div>
           ${repsObra.length?`<div class="xs mu mb8">📋 ${repsObra.length} reporte${repsObra.length>1?"s":""}</div>`:""}
-          <button class="btn btn-gh btn-xs" data-accion-fin="ver-reportes" data-obra-fin="${o.obra_id}">📋 Ver historial</button>
+          <button class="btn btn-gh btn-xs"
+            data-accion-fin="ver-reportes"
+            data-obra-fin="${o.obra_id}"
+            data-cliente="${(o.cliente||"").replace(/"/g,"&quot;")}">📋 Ver historial</button>
         </div>`;
       });
       h+=`</div>`;
@@ -1853,24 +1861,25 @@ async function loadMT(){
     el("d-mt").innerHTML=h||`<div class="mu" style="text-align:center;padding:40px">Sin actividad</div>`;
 
     // Event delegation para obras activas
-    // Use .onclick to avoid listener accumulation across reloads
+    // Read ALL data from DOM attributes - no closure dependency
     el("d-mt").onclick=e=>{
-      // Obras activas
       const accion=e.target.closest("[data-accion]")?.dataset.accion;
       if(accion){
         const row=e.target.closest("[data-mt-obra]");if(!row)return;
-        const o=obrasActivas[parseInt(row.dataset.mtObra)];if(!o)return;
-        if(accion==="reporte")modalReporteDiario(o.obra_id,o.cliente);
-        else if(accion==="ver-reportes")verHistorialObra(o.obra_id,o.cliente);
-        else if(accion==="solicitar")modalSolicitarMaterial(o.obra_id);
-        else if(accion==="estado-tec")modalCambiarEstadoTecnico(o.obra_id,o.estado||"");
+        // Read directly from DOM - always current
+        const obraId=row.dataset.obraId;
+        const cliente=row.dataset.cliente;
+        const estado=row.dataset.estado;
+        if(!obraId)return;
+        if(accion==="reporte")modalReporteDiario(obraId,cliente);
+        else if(accion==="ver-reportes")verHistorialObra(obraId,cliente);
+        else if(accion==="solicitar")modalSolicitarMaterial(obraId);
+        else if(accion==="estado-tec")modalCambiarEstadoTecnico(obraId,estado||"");
       }
-      // Obras terminadas
+      // Obras terminadas - también por DOM
       const btnFin=e.target.closest("[data-accion-fin]");
       if(btnFin){
-        const obraId=btnFin.dataset.obraFin;
-        const o=obrasTerminadas.find(x=>x.obra_id===obraId);
-        if(o)verHistorialObra(o.obra_id,o.cliente);
+        verHistorialObra(btnFin.dataset.obraFin,btnFin.dataset.cliente);
       }
     };
 
