@@ -471,6 +471,36 @@ async function loadDash(){
       ${kpi("Clientes",d.crm?.total_clientes||0,"purple","en CRM")}
     </div>`;
     if(d.inventario?.criticos>0)h+=`<div class="al al-d mb12">⚠ <b>${d.inventario.criticos} ítems bajo mínimo</b><br>${(d.inventario.criticos_lista||[]).slice(0,3).map(i=>`· ${i.descripcion}: ${i.disponible} (mín: ${i.minimo})`).join("<br>")}</div>`;
+
+    // ── PANEL SOLICITUDES DE MATERIAL para Pañol/Operaciones/Dirección ──
+    const esPanol=["Pañol","Operaciones","Dirección"].includes(u.area)||
+                  (u.puede?.ingresar_mercaderia&&!u.puede?.ver_solo_su_obra);
+    if(esPanol&&d.solicitudes_pendientes_lista?.length){
+      h+=`<div class="card mb12">
+        <div class="ct">📦 Solicitudes de material pendientes (${d.solicitudes_pendientes_lista.length})</div>`;
+      d.solicitudes_pendientes_lista.forEach(sol=>{
+        const urgColor=sol.prioridad==="Urgente"?"var(--ar)":sol.prioridad==="Alta"?"var(--ay)":"var(--border2)";
+        h+=`<div style="border:1px solid ${urgColor};border-radius:8px;padding:12px;margin-bottom:8px">
+          <div class="flex between mb8">
+            <div><span class="bold">${sol.tecnico_nombre||"Técnico"}</span>
+            <span class="xs mu" style="margin-left:6px">🏗 ${sol.obra_id||""}</span></div>
+            <div class="flex gap8">
+              ${sol.prioridad==="Urgente"?`<span class="badge b-red">⚠ URGENTE</span>`:sol.prioridad==="Alta"?`<span class="badge b-amber">Alta</span>`:""}
+              <span class="xs mu">${sol.fecha||""}</span>
+            </div>
+          </div>
+          <div class="sm mb8" style="white-space:pre-wrap">${sol.item_solicitado||""}</div>
+          ${sol.descripcion&&sol.descripcion!==sol.item_solicitado?`<div class="xs mu mb8">📝 ${sol.descripcion}</div>`:""}
+          <div class="flex gap8 wrap">
+            <button class="btn btn-g btn-xs" onclick="atenderSolicitudDash('${sol.reporte_id}')">✓ Atendida / En proceso</button>
+            <button class="btn btn-warn btn-xs" onclick="goMod('compras')">🛒 Generar OC</button>
+          </div>
+        </div>`;
+      });
+      h+=`</div>`;
+    } else if(esPanol&&d.solicitudes_pendientes===0){
+      // No pending - good
+    }
     if(d.solicitudes_pendientes>0)h+=`<div class="al al-w mb12">📦 <b>${d.solicitudes_pendientes} solicitudes de material pendientes</b> — revisar en Técnicos</div>`;
     // OCs propias aprobadas/rechazadas (notificacion)
     if(d.ocs_propias_resueltas?.length){
@@ -1724,6 +1754,13 @@ async function verReportesTecnico(tecId,nombre){
   }catch(e){showModal(`<button class="mo-x" onclick="closeModal()">✕</button><div class="al al-d">${e.message}</div>`);}
 }
 async function atenderSolicitud(repId){try{await api("atenderSolicitud",{reporte_id:repId});toast("✓ Solicitud atendida");loadTec();}catch(e){toast("Error: "+e.message);}}
+async function atenderSolicitudDash(repId){
+  try{
+    await api("atenderSolicitud",{reporte_id:repId});
+    toast("✓ Solicitud marcada como atendida");
+    loadDash(); // refresh dashboard
+  }catch(e){toast("Error: "+e.message);}
+}
 function modalAsignarTecnico(tecId){
   const obras=S.obras.filter(o=>o.estado==="En ejecución").map(o=>`<option value="${o.obra_id}">${o.obra_id} — ${o.cliente}</option>`).join("");
   // Obtener lista de tecnicos disponibles del Sheet
