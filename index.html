@@ -493,9 +493,10 @@ async function loadDash(){
     const esPanol=["Pañol","Operaciones","Dirección"].includes(u.area)||
                   (u.puede?.ingresar_mercaderia&&!u.puede?.ver_solo_su_obra);
     if(esPanol&&d.solicitudes_pendientes_lista?.length){
+      window._dashSolicitudes=d.solicitudes_pendientes_lista; // store for modal access
       h+=`<div class="card mb12">
         <div class="ct">📦 Solicitudes de material pendientes (${d.solicitudes_pendientes_lista.length})</div>`;
-      d.solicitudes_pendientes_lista.forEach(sol=>{
+      d.solicitudes_pendientes_lista.forEach((sol,i)=>{
         const urgColor=sol.prioridad==="Urgente"?"var(--ar)":sol.prioridad==="Alta"?"var(--ay)":"var(--border2)";
         h+=`<div style="border:1px solid ${urgColor};border-radius:8px;padding:12px;margin-bottom:8px">
           <div class="flex between mb8">
@@ -509,7 +510,7 @@ async function loadDash(){
           <div class="sm mb8" style="white-space:pre-wrap">${sol.item_solicitado||""}</div>
           ${sol.descripcion&&sol.descripcion!==sol.item_solicitado?`<div class="xs mu mb8">📝 ${sol.descripcion}</div>`:""}
           <div class="flex gap8 wrap">
-            <button class="btn btn-g btn-xs" onclick="atenderSolicitudDash('${sol.reporte_id}')">✓ Atendida / En proceso</button>
+            <button class="btn btn-g btn-xs" onclick="abrirSolicitudDash(${i})">📋 Ver y procesar</button>
             <button class="btn btn-warn btn-xs" onclick="goMod('compras')">🛒 Generar OC</button>
           </div>
         </div>`;
@@ -1771,6 +1772,12 @@ async function verReportesTecnico(tecId,nombre){
   }catch(e){showModal(`<button class="mo-x" onclick="closeModal()">✕</button><div class="al al-d">${e.message}</div>`);}
 }
 async function atenderSolicitud(repId){try{await api("atenderSolicitud",{reporte_id:repId});toast("✓ Solicitud atendida");loadTec();}catch(e){toast("Error: "+e.message);}}
+function abrirSolicitudDash(idx){
+  // Open the solicitudes module and show the specific solicitud
+  window._dashSolIdx=idx;
+  goMod("solicitudes");
+}
+
 async function atenderSolicitudDash(repId){
   try{
     await api("atenderSolicitud",{reporte_id:repId});
@@ -2448,8 +2455,13 @@ async function loadSolicitudes(filtro){
   // Store sols in closure for event handler
   var solsData=[];
   try{
-    const d=await api("getSolicitudes",{filtro:filtro||""});
+    // Load solicitudes AND inventory in parallel for stock check
+    const [d, dInv]=await Promise.all([
+      api("getSolicitudes",{filtro:filtro||""}),
+      S.inv.length?Promise.resolve({items:S.inv}):api("getInventario")
+    ]);
     solsData=d.solicitudes||[];
+    if(dInv.items)S.inv=dInv.items; // cache inventory
 
     if(!solsData.length){
       const msgs={atendido:"Sin solicitudes atendidas.",todas:"Sin solicitudes registradas."};
@@ -2521,105 +2533,195 @@ async function loadSolicitudes(filtro){
   }
 }
 
-function modalAtenderSolicitud(sol,modo){
-  const esEntrega=modo==="entregar";
-  const esOC=modo==="oc";
-  const esParcial=modo==="parcial";
-
+function modalAtenderSolicitud(sol, modo){
   // Parse items from the solicitud
-  const items=[];
-  try{
-    if(sol.items_json)items.push(...JSON.parse(sol.items_json));
-  }catch(e){}
-  // Fallback: parse from item_solicitado text
+  var items=[];
+  try{if(sol.items_json)items=JSON.parse(sol.items_json);}catch(e){}
   if(!items.length&&sol.item_solicitado){
-    sol.item_solicitado.split("|").forEach((line,i)=>{
-      const t=line.replace(/^\d+\.\s*/,"").trim();
-      if(t)items.push({desc:t,cant:1,uni:"ud."});
+    sol.item_solicitado.split("|").forEach(function(line){
+      var t=line.replace(/^\d+\.\s*/,"").trim();
+      if(t)items.push({desc:t,cant:1,uni:"ud.",itemId:""});
     });
   }
+  window._solAtual=sol;
+  window._solItems=items;
 
-  const itemsHTML=items.map((it,i)=>`
-    <div style="display:flex;align-items:center;gap:8px;padding:8px;background:var(--card2);border:1px solid var(--border2);border-radius:8px;margin-bottom:6px">
-      <div style="flex:1">
-        <div class="sm bold">${it.desc||it.item_solicitado||""}</div>
-        <div class="xs mu">${it.cant||1} ${it.uni||"ud."}${it.obs?" · "+it.obs:""}</div>
-      </div>
-      ${esParcial||esOC?`<select class="sel" style="width:120px;font-size:11px" id="sol-accion-${i}">
-        ${esOC?"":"<option value='stock'>✓ Del stock</option>"}
-        <option value="oc">🛒 Generar OC</option>
-        <option value="nodisp">✗ No disponible</option>
-      </select>`:""}
-    </div>`).join("");
+  // Load stock for each item
+  var stockMap={};
+  if(S.inv&&S.inv.length){
+    S.inv.forEach(function(i){ stockMap[i.item_id]={stock:i.stock_disponible,desc:i.descripcion,uni:i.unidad||"ud."}; });
+  }
 
-  const titulo=esEntrega?"✓ Confirmar entrega del stock":esOC?"🛒 Generar OC para esta solicitud":"⚙ Resolver solicitud parcialmente";
-  const btnTxt=esEntrega?"Confirmar entrega":esOC?"Generar OC":"Resolver";
+  // Build items rows with stock check
+  var itemsRows=items.map(function(it,i){
+    var stockInfo=stockMap[it.itemId||""];
+    var stockDisp=stockInfo?stockInfo.stock:null;
+    var stockBadge=stockInfo===undefined
+      ?'<span class="badge b-gray">Sin cód.</span>'
+      :stockDisp>=it.cant
+        ?'<span class="badge b-green">✓ Stock: '+stockDisp+' '+it.uni+'</span>'
+        :stockDisp>0
+          ?'<span class="badge b-amber">⚠ Parcial: '+stockDisp+' de '+it.cant+'</span>'
+          :'<span class="badge b-red">✗ Sin stock</span>';
 
-  showModal(`<button class="mo-x" onclick="closeModal()">✕</button>
-    <div class="mo-t">${titulo}</div>
-    <div class="xs mu mb12">&#128119; ${sol.tecnico_nombre||""} · &#127959; ${sol.obra_id||""}</div>
-    ${sol.descripcion?`<div class="al al-i mb12">&#128221; ${sol.descripcion}</div>`:""}
-    <div class="ct">Ítems</div>
-    ${itemsHTML||`<div class="sm mu">${sol.item_solicitado||""}</div>`}
-    ${esParcial||esOC?"<div class='xs mu mt8 mb12'>Elegí cómo resolver cada ítem</div>":""}
-    ${esEntrega?`<div class="fg mt8"><label>OBSERVACIÓN (opcional)</label><input class="inp" id="sol-obs" placeholder="Qué se entregó, dónde..."></div>`:""}
-    <button class="btn btn-p btn-bl mt8" onclick="confirmarAtencionSolicitud('${sol.reporte_id}','${modo}',${JSON.stringify(items).replace(/'/g,"\'")})">
-      ${btnTxt}
-    </button>`);
+    // Default action based on stock
+    var defAccion=stockInfo&&stockDisp>=it.cant?"stock":"oc";
+
+    return '<div style="border:1px solid var(--border2);border-radius:8px;padding:10px;margin-bottom:8px" id="sol-row-'+i+'">'
+      +'<div class="flex between mb6">'
+        +'<div><span class="sm bold">'+it.desc+'</span>'
+        +' <span class="xs mu">'+it.cant+' '+it.uni+'</span>'
+        +(it.obs?'<span class="xs mu"> · '+it.obs+'</span>':'')
+        +'</div>'
+        +stockBadge
+      +'</div>'
+      +'<div class="flex gap8">'
+        +'<label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer">'
+          +'<input type="radio" name="sol-accion-'+i+'" value="stock" id="sol-stock-'+i+'" '+(defAccion==="stock"?"checked":"")+'>'
+          +' ✓ Entregar del stock'
+        +'</label>'
+        +'<label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer">'
+          +'<input type="radio" name="sol-accion-'+i+'" value="oc" id="sol-oc-'+i+'" '+(defAccion==="oc"?"checked":"")+'>'
+          +' 🛒 Generar OC'
+        +'</label>'
+        +'<label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer">'
+          +'<input type="radio" name="sol-accion-'+i+'" value="skip" id="sol-skip-'+i+'">'
+          +' — No procesar'
+        +'</label>'
+      +'</div>'
+    +'</div>';
+  }).join("");
+
+  showModal(
+    '<button class="mo-x" onclick="closeModal()">✕</button>'
+    +'<div class="mo-t">📦 Resolver solicitud</div>'
+    +'<div class="xs mu mb12">👷 '+sol.tecnico_nombre+' · 🏗 '+sol.obra_id
+      +(sol.prioridad==="Urgente"?'<span class="badge b-red" style="margin-left:8px">⚠ URGENTE</span>':'')
+      +(sol.prioridad==="Alta"?'<span class="badge b-amber" style="margin-left:8px">Alta</span>':'')
+    +'</div>'
+    +(sol.descripcion?'<div class="al al-i mb12">📝 '+sol.descripcion+'</div>':"")
+    +'<div class="ct">Elegí cómo resolver cada ítem:</div>'
+    +itemsRows
+    +'<div class="fg mt8"><label>OC — PROVEEDOR (opcional)</label>'
+      +'<input class="inp" id="sol-prov" placeholder="Nombre del proveedor para las OCs...">'
+    +'</div>'
+    +'<div class="fg"><label>NOTA DE ENTREGA (para el remito)</label>'
+      +'<input class="inp" id="sol-nota" placeholder="Ej: Entregado en obra el día de hoy...">'
+    +'</div>'
+    +'<button class="btn btn-p btn-bl mt8" onclick="procesarSolicitud()">Procesar y generar documentos</button>'
+  );
 }
 
-async function confirmarAtencionSolicitud(repId,modo){
-  const items=window._solItems||[];
-  // For OC mode: collect which items need OC and create them
-  if(modo==="oc"||modo==="parcial"){
-    const paraOC=[];
-    items.forEach((it,i)=>{
-      const sel=document.getElementById("sol-accion-"+i);
-      const accion=sel?sel.value:(modo==="oc"?"oc":"stock");
-      if(accion==="oc")paraOC.push(it);
-    });
-    if(paraOC.length>0){
-      // Navigate to compras with pre-filled data
-      closeModal();
-      toast("Abriendo formulario de OC con los ítems seleccionados...");
-      setTimeout(async()=>{
-        goMod("compras");
-        await new Promise(r=>setTimeout(r,500));
-        await modalCompra();
-        // Pre-fill items
-        if(window._cOC!==undefined){
-          // Clear existing and add items
-          const wrap=document.getElementById("oc-items");
-          if(wrap){
-            wrap.innerHTML="";
-            window._cOC=0;
-            for(const it of paraOC){
-              addItemOC();
-              const idx=window._cOC-1;
-              const descEl=document.getElementById("oc-desc-"+idx);
-              const canEl=document.getElementById("oc-can-"+idx);
-              const uniEl=document.getElementById("oc-uni-"+idx);
-              if(descEl)descEl.value=it.desc||it.item_solicitado||"";
-              if(canEl)canEl.value=it.cant||1;
-              if(uniEl)uniEl.value=it.uni||"ud.";
-            }
-          }
-        }
-      },300);
-      // Mark as partially attended
-      if(modo==="parcial")await api("atenderSolicitud",{reporte_id:repId,observacion:"OC generada para algunos ítems"}).catch(()=>{});
-      return;
-    }
+async function procesarSolicitud(){
+  var sol=window._solAtual;
+  var items=window._solItems||[];
+  if(!sol||!items.length){toast("Error: sin datos de solicitud");return;}
+
+  var paraStock=[];
+  var paraOC=[];
+
+  items.forEach(function(it,i){
+    var radio=document.querySelector('input[name="sol-accion-'+i+'"]:checked');
+    var accion=radio?radio.value:"skip";
+    if(accion==="stock")paraStock.push(it);
+    else if(accion==="oc")paraOC.push(it);
+  });
+
+  if(paraStock.length===0&&paraOC.length===0){
+    toast("Elegí al menos una acción para algún ítem");return;
   }
-  // Mark as fully attended
-  const obs=document.getElementById("sol-obs")?.value||"";
+
+  var prov=document.getElementById("sol-prov")?.value||"";
+  var nota=document.getElementById("sol-nota")?.value||"";
+  var btn=document.querySelector("#mc .btn-p.btn-bl");
+  if(btn){btn.disabled=true;btn.textContent="Procesando...";}
+
+  var resultados=[];
+
   try{
-    await api("atenderSolicitud",{reporte_id:repId,observacion:obs});
+    // 1. Generar Remito de entrega para ítems del stock
+    if(paraStock.length>0){
+      // Find cliente from obra
+      var obra=S.obras.find(function(o){return o.obra_id===sol.obra_id;})||{};
+      var cliNom=obra.cliente||sol.tecnico_nombre||"";
+      // Find cliente_id
+      var cli=S.clientes.find(function(c){return c.razon_social===cliNom;})||{};
+
+      var remitoItems=paraStock.map(function(it){
+        return {item_id:it.itemId||"",descripcion:it.desc,cantidad:it.cant,unidad:it.uni||"ud.",precio_unitario:0,subtotal:0};
+      });
+
+      var remitoBody={
+        cliente_id: cli.cliente_id||"",
+        cliente_nombre: cliNom||sol.tecnico_nombre,
+        obra_id: sol.obra_id||"",
+        items: JSON.stringify(remitoItems),
+        subtotal: 0,
+        observaciones: "Entrega a técnico "+sol.tecnico_nombre+(nota?" — "+nota:"")
+          +"\nSolicitud: "+(sol.reporte_id||"")
+      };
+      var rRes=await api("createRemito",remitoBody);
+      resultados.push("✓ Remito "+rRes.remitoId+" generado ("+paraStock.length+" ítem"+(paraStock.length>1?"s":"")+")");
+
+      // Register egreso from stock for each item
+      for(var si=0;si<paraStock.length;si++){
+        var sit=paraStock[si];
+        if(sit.itemId){
+          try{
+            await api("egresarMercaderia",{
+              item_id:sit.itemId,
+              cantidad:sit.cant,
+              obra_id:sol.obra_id||"",
+              tipo_mov:"Retiro",
+              observaciones:"Entrega por solicitud "+sol.reporte_id+" a "+sol.tecnico_nombre
+            });
+          }catch(eErr){console.warn("Egreso error:",eErr.message);}
+        }
+      }
+    }
+
+    // 2. Generar OC para ítems sin stock
+    if(paraOC.length>0){
+      var ocItems=paraOC.map(function(it){
+        return {item_id:it.itemId||"",descripcion:it.desc,cantidad_faltante:it.cant,unidad:it.uni||"ud."};
+      });
+      var ocBody={
+        obra_id: sol.obra_id||"",
+        proveedor: prov,
+        prioridad: sol.prioridad||"Normal",
+        observaciones: "Generada desde solicitud "+sol.reporte_id+" de "+sol.tecnico_nombre,
+        items: JSON.stringify(ocItems)
+      };
+      var ocRes=await api("createCompraMulti",ocBody);
+      var ocIds=(ocRes.compraIds||[]).join(", ");
+      resultados.push("✓ OC "+ocIds+" generada ("+paraOC.length+" ítem"+(paraOC.length>1?"s":"")+") — pendiente aprobación");
+    }
+
+    // 3. Mark solicitud as attended
+    await api("atenderSolicitud",{reporte_id:sol.reporte_id,observacion:resultados.join(" | ")});
+
+    // Show result
     closeModal();
-    toast("✓ Solicitud resuelta");
-    loadSolicitudes(document.querySelector("#sol-chips .chip.active")?.dataset.filter||"");
-  }catch(e){toast("Error: "+e.message);}
+    var resHTML='<button class="mo-x" onclick="closeModal()">✕</button>'
+      +'<div class="mo-t">✅ Solicitud procesada</div>'
+      +'<div class="al al-s mb12">Documentos generados correctamente</div>';
+    resultados.forEach(function(r){
+      resHTML+='<div style="padding:8px;background:var(--card2);border-radius:8px;margin-bottom:6px;font-size:13px">'+r+'</div>';
+    });
+    resHTML+='<div class="flex gap8 mt12">'
+      +(paraStock.length>0?'<button class="btn btn-p btn-sm" onclick="closeModal();goMod(\'remitos\')">Ver remito</button>':"")
+      +(paraOC.length>0?'<button class="btn btn-gh btn-sm" onclick="closeModal();goMod(\'compras\')">Ver OC</button>':"")
+      +'<button class="btn btn-gh btn-sm" onclick="closeModal();loadSolicitudes()">Volver a solicitudes</button>'
+    +'</div>';
+    showModal(resHTML);
+    toast("✓ Solicitud procesada: "+resultados.length+" documento"+(resultados.length>1?"s":"")+" generado"+(resultados.length>1?"s":""));
+
+  }catch(e){
+    if(btn){btn.disabled=false;btn.textContent="Procesar y generar documentos";}
+    toast("Error: "+e.message);
+  }
 }
+
 
 async function loadTraza(){
   el("d-traza").innerHTML=ldr();
