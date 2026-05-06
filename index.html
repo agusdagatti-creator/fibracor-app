@@ -1853,22 +1853,27 @@ async function ingresarRapidoOC(ocId, pend, provId){
   }
 }
 
-function modalIngresarManualDesdeOC(ocId, pend, provId){
-  // When OC has no item_id, let user pick the item manually
-  const invOpts=(S.inv||[]).map(i=>'<option value="'+i.item_id+'">'+i.descripcion+' ['+i.item_id+'] — Stock: '+(i.stock_disponible||0)+'</option>').join("");
+async function modalIngresarManualDesdeOC(ocId, pend, provId){
+  showModal(ldr());
+  // Ensure inventory is loaded
+  if(!S.inv||!S.inv.length){
+    try{const dI=await api("getInventario");S.inv=dI.items||[];}catch(e){}
+  }
+  const makeOpts=()=>(S.inv||[]).map(i=>'<option value="'+i.item_id+'">'+i.descripcion+' ['+i.item_id+'] — Stock: '+(i.stock_disponible||0)+'</option>').join("");
   showModal('<button class="mo-x" onclick="closeModal();verProveedor(\''+provId+'\')">✕</button>'
     +'<div class="mo-t">📥 Ingresar mercadería — '+ocId+'</div>'
     +'<div class="al al-w mb12">Esta OC no tiene ítem de inventario vinculado. Seleccioná el ítem al que querés ingresar la mercadería.</div>'
     +'<div class="fg"><label>BUSCAR ÍTEM *</label>'
-      +'<input class="inp mb6" id="mim-busca" placeholder="Filtrar..." oninput="filtrarMimItems(this.value)">'
-      +'<select class="sel" id="mim-item" size="6" style="height:auto">'+invOpts+'</select>'
+      +'<input class="inp mb6" id="mim-busca" placeholder="Filtrar por nombre o código..." oninput="filtrarMimItems(this.value)">'
+      +'<select class="sel" id="mim-item" size="8" style="height:auto">'+makeOpts()+'</select>'
+      +'<div class="xs mu mt4">'+((S.inv||[]).length)+' ítems en inventario</div>'
     +'</div>'
     +'<div class="g2f">'
-      +'<div class="fg"><label>CANTIDAD</label>'
+      +'<div class="fg"><label>CANTIDAD A INGRESAR</label>'
         +'<input class="inp" type="number" id="mim-cant" value="'+pend+'" min="0.01" step="0.01">'
       +'</div>'
-      +'<div class="fg"><label>REFERENCIA</label>'
-        +'<input class="inp" id="mim-ref" placeholder="Factura, remito...">'
+      +'<div class="fg"><label>REFERENCIA (factura, remito)</label>'
+        +'<input class="inp" id="mim-ref" placeholder="Ej: FA 0001-00001...">'
       +'</div>'
     +'</div>'
     +'<button class="btn btn-p btn-bl" onclick="confirmarIngresarManualOC(\''+ocId+'\',\''+provId+'\')">📥 Ingresar al stock</button>');
