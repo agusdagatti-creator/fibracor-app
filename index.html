@@ -1681,10 +1681,14 @@ async function verProveedor(id){
   const reqId=++_modalReqId;
   showModal(ldr());
   try{
-    const d=await api("getProveedorDetalle",{proveedor_id:id});
+    // Load proveedor info + OCs in parallel using lean endpoint
+    const [d, dOCs]=await Promise.all([
+      api("getProveedorDetalle",{proveedor_id:id}),
+      api("getOCsProveedor",{proveedor_id:id})
+    ]);
     if(reqId!==_modalReqId)return;
     const p=d.proveedor;
-    const ocs=d.ordenes||[];
+    const ocs=dOCs.ordenes||d.ordenes||[];
     const vP=S.user.puede?.ver_precios;
 
     // Categorize
@@ -1792,14 +1796,61 @@ async function verProveedor(id){
 async function ingresarRapidoOC(ocId, pend, provId){
   if(!confirm("¿Ingresar al stock las "+pend+" unidades pendientes de la OC "+ocId+"?"))return;
   try{
-    await api("ingresarOCCompleta",{
-      oc_id:ocId,
-      cantidad:pend,
-      referencia:"OC "+ocId
-    });
+    await api("ingresarOCCompleta",{oc_id:ocId,cantidad:pend,referencia:"OC "+ocId});
     toast("✓ Ingresadas "+pend+" unidades al stock");
-    // Reload provider view
     closeModal();
+    setTimeout(()=>verProveedor(provId),200);
+  }catch(e){
+    // If error is about missing item_id, redirect to manual ingress
+    if(e.message&&e.message.includes("ítem de inventario")){
+      closeModal();
+      toast("Esta OC no tiene ítem asignado — usá el ingreso manual");
+      setTimeout(()=>modalIngresarManualDesdeOC(ocId,pend,provId),300);
+    } else {
+      toast("Error: "+e.message);
+    }
+  }
+}
+
+function modalIngresarManualDesdeOC(ocId, pend, provId){
+  // When OC has no item_id, let user pick the item manually
+  const invOpts=(S.inv||[]).map(i=>'<option value="'+i.item_id+'">'+i.descripcion+' ['+i.item_id+'] — Stock: '+(i.stock_disponible||0)+'</option>').join("");
+  showModal('<button class="mo-x" onclick="closeModal();verProveedor(\''+provId+'\')">✕</button>'
+    +'<div class="mo-t">📥 Ingresar mercadería — '+ocId+'</div>'
+    +'<div class="al al-w mb12">Esta OC no tiene ítem de inventario vinculado. Seleccioná el ítem al que querés ingresar la mercadería.</div>'
+    +'<div class="fg"><label>BUSCAR ÍTEM *</label>'
+      +'<input class="inp mb6" id="mim-busca" placeholder="Filtrar..." oninput="filtrarMimItems(this.value)">'
+      +'<select class="sel" id="mim-item" size="6" style="height:auto">'+invOpts+'</select>'
+    +'</div>'
+    +'<div class="g2f">'
+      +'<div class="fg"><label>CANTIDAD</label>'
+        +'<input class="inp" type="number" id="mim-cant" value="'+pend+'" min="0.01" step="0.01">'
+      +'</div>'
+      +'<div class="fg"><label>REFERENCIA</label>'
+        +'<input class="inp" id="mim-ref" placeholder="Factura, remito...">'
+      +'</div>'
+    +'</div>'
+    +'<button class="btn btn-p btn-bl" onclick="confirmarIngresarManualOC(\''+ocId+'\',\''+provId+'\')">📥 Ingresar al stock</button>');
+}
+
+function filtrarMimItems(q){
+  const ql=q.toLowerCase().trim();
+  const sel=document.getElementById("mim-item");
+  if(!sel)return;
+  sel.innerHTML=(S.inv||[]).filter(i=>!ql||i.descripcion.toLowerCase().includes(ql)||i.item_id.toLowerCase().includes(ql))
+    .map(i=>'<option value="'+i.item_id+'">'+i.descripcion+' ['+i.item_id+'] — Stock: '+(i.stock_disponible||0)+'</option>').join("");
+}
+
+async function confirmarIngresarManualOC(ocId, provId){
+  const itemId=document.getElementById("mim-item")?.value;
+  const cant=parseFloat(document.getElementById("mim-cant")?.value)||0;
+  const ref=document.getElementById("mim-ref")?.value||"";
+  if(!itemId){toast("Seleccioná un ítem");return;}
+  if(cant<=0){toast("Ingresá una cantidad válida");return;}
+  try{
+    await api("ingresarOCCompleta",{oc_id:ocId,item_id:itemId,cantidad:cant,referencia:ref||"OC "+ocId});
+    closeModal();
+    toast("✓ Ingresado al stock");
     setTimeout(()=>verProveedor(provId),200);
   }catch(e){toast("Error: "+e.message);}
 }
@@ -1837,9 +1888,13 @@ async function confirmarIngresoParcial(ocId, pendiente, provId){
 async function modalIngresoMasivoProveedor(provId){
   showModal(ldr());
   try{
-    const d=await api("getProveedorDetalle",{proveedor_id:provId});
-    const p=d.proveedor;
-    const ocs=(d.ordenes||[]).filter(o=>o.estado==="Aprobado"||o.estado==="Parcial");
+    // Use lean endpoint - avoids full getProveedorDetalle timeout
+    const [dP, dOCs]=await Promise.all([
+      api("getProveedorDetalle",{proveedor_id:provId}),
+      api("getOCsProveedor",{proveedor_id:provId})
+    ]);
+    const p=dP.proveedor;
+    const ocs=(dOCs.ordenes||dP.ordenes||[]).filter(o=>o.estado==="Aprobado"||o.estado==="Parcial");
 
     if(!ocs.length){
       showModal('<button class="mo-x" onclick="closeModal();verProveedor(\''+provId+'\')">✕</button>'
@@ -1927,30 +1982,42 @@ async function confirmarIngresoMasivo(provId){
   const btn=event.target;
   if(btn){btn.disabled=true;btn.textContent="Procesando...";}
 
-  let ok=0,fail=0;
+  let okCount=0;
   const errores=[];
+  const sinItem=[];
+
   for(const item of aIngresar){
     try{
-      await api("ingresarOCCompleta",{
-        oc_id:item.ocId,
-        cantidad:item.cant,
-        referencia:ref||"OC "+item.ocId
-      });
-      ok++;
+      await api("ingresarOCCompleta",{oc_id:item.ocId,cantidad:item.cant,referencia:ref||"OC "+item.ocId});
+      okCount++;
     }catch(e){
-      fail++;
-      errores.push(item.ocId+": "+e.message);
+      if(e.message&&e.message.includes("ítem de inventario")){
+        sinItem.push(item);
+      } else {
+        errores.push(item.ocId+": "+e.message);
+      }
     }
   }
 
   closeModal();
-  if(fail===0){
-    toast("✓ "+ok+" OC"+(ok>1?"s":"")+" ingresada"+(ok>1?"s":"")+" al stock");
-  }else{
-    toast("⚠ "+ok+" exitosas, "+fail+" con error");
-    console.warn("Errores ingreso masivo:",errores);
+
+  if(okCount>0)toast("✓ "+okCount+" OC"+(okCount>1?"s":"")+" ingresada"+(okCount>1?"s":"")+" al stock");
+
+  if(sinItem.length){
+    // Show which OCs need manual item selection
+    setTimeout(()=>{
+      showModal('<button class="mo-x" onclick="closeModal();verProveedor(\''+provId+'\')">✕</button>'
+        +'<div class="mo-t">⚠ OCs sin ítem vinculado</div>'
+        +'<div class="al al-w mb12">Las siguientes OCs no tienen ítem de inventario asignado. Ingresar manualmente una por una:</div>'
+        +sinItem.map(item=>'<button class="btn btn-p btn-sm mb6" onclick="closeModal();modalIngresarManualDesdeOC(\''+item.ocId+'\','+item.cant+',\''+provId+'\')">📥 Ingresar '+item.ocId+' ('+item.cant+' unidades)</button>').join('<br>'));
+    },300);
+  } else if(errores.length){
+    toast("⚠ "+errores.length+" con error: "+errores.join(", "));
+  } else if(okCount===0){
+    toast("⚠ No se pudo ingresar ninguna OC");
   }
-  setTimeout(()=>verProveedor(provId),200);
+
+  setTimeout(()=>verProveedor(provId),(sinItem.length?2000:200));
 }
 async function modalCompraDesdeProveedor(provId,provNombre){
   await ensureAprobadores();
@@ -3314,6 +3381,8 @@ async function loadSolicitudes(filtro){
 
 async function abrirGestionObra(grupo){
   await ensureProveedores();
+  // Force fresh inventory for accurate stock check
+  try{const dI=await api("getInventario");S.inv=dI.items||[];}catch(e){}
   // Aggregate all items from all pending solicitudes of this obra
   // Each item carries reference to its source solicitud
   const allItems=[];
@@ -3362,6 +3431,9 @@ async function abrirGestionObra(grupo){
     return false;
   }
 
+  // Auto-link items that have no itemId by matching name to inventory
+  autoLinkItems(allItems, stockMap);
+
   // Classify
   const materiales=[];
   const herramientas=[];
@@ -3373,27 +3445,29 @@ async function abrirGestionObra(grupo){
 
   function renderRow(it){
     const i=it._globalIdx;
-    const stockInfo=it.itemId?stockMap[it.itemId]:null;
-    const stockDisp=stockInfo?stockInfo.stock:null;
+    // Use itemId (may have been set by autoLinkItems)
+    const itemId=it.itemId||"";
+    const stockInfo=itemId?stockMap[itemId]:null;
+    const stockDisp=stockInfo?parseFloat(stockInfo.stock)||0:null;
     const cantNeed=parseFloat(it.cant)||1;
-    const sinCodigo = !it.itemId;
 
     let stockBadge="";
-    if(sinCodigo){
+    if(!itemId){
+      // No code at all - show vincular button
       stockBadge='<button class="btn btn-gh btn-xs" onclick="vincularItemConStock('+i+')" style="font-size:10px">🔗 Vincular con stock</button>';
-    }else if(stockInfo===null){
-      stockBadge='<span class="badge b-gray" style="font-size:10px">Código no encontrado</span>';
+    }else if(stockInfo===null||stockInfo===undefined){
+      // Has code but not found in current stockMap - show code and vincular
+      stockBadge='<span class="badge b-gray" style="font-size:10px" title="'+itemId+'">'+itemId+' — verificar</span>';
     }else if(stockDisp>=cantNeed){
-      stockBadge='<span class="badge b-green" style="font-size:10px">✓ Stock: '+stockDisp+'</span>';
+      stockBadge='<span class="badge b-green" style="font-size:10px">'+(it._autoLinked?'🔗 ':'')+'✓ '+stockDisp+' en stock</span>';
     }else if(stockDisp>0){
-      stockBadge='<span class="badge b-amber" style="font-size:10px">⚠ Solo '+stockDisp+'</span>';
+      stockBadge='<span class="badge b-amber" style="font-size:10px">⚠ Solo '+stockDisp+' / '+cantNeed+'</span>';
     }else{
       stockBadge='<span class="badge b-red" style="font-size:10px">✗ Sin stock</span>';
     }
 
-    const puedeEntregar=stockInfo&&stockDisp>=cantNeed;
+    const puedeEntregar=stockInfo!==null&&stockInfo!==undefined&&stockDisp>=cantNeed;
     const proveedorInfo=stockInfo&&stockInfo.prov?'<div class="xs mu" style="color:#a78bfa">🏭 '+stockInfo.prov+'</div>':'';
-
     const urgClr=it._prioridad==="Urgente"?"#ef4444":it._prioridad==="Alta"?"#f59e0b":"";
 
     return '<div style="border:1px solid '+(urgClr||'var(--border)')+';border-radius:6px;padding:10px;margin-bottom:6px" data-global-idx="'+i+'">'
@@ -3401,7 +3475,7 @@ async function abrirGestionObra(grupo){
         +'<div style="flex:1;min-width:200px">'
           +'<span class="sm bold">'+it.desc+'</span>'
           +' <span class="xs mu">'+cantNeed+' '+(it.uni||"ud.")+'</span>'
-          +(it.itemId?' <span class="xs mu">['+it.itemId+']</span>':'')
+          +(itemId?'<span class="xs mu" style="margin-left:4px">['+itemId+']</span>':'')
           +'<div class="xs mu">📋 '+it._solId+' · 👷 '+it._tecnico
             +(it._prioridad==="Urgente"?' · <span style="color:#ef4444">⚠ URGENTE</span>':'')
             +(it._prioridad==="Alta"?' · <span style="color:#f59e0b">Alta</span>':'')
@@ -3413,11 +3487,11 @@ async function abrirGestionObra(grupo){
       +'</div>'
       +'<div class="flex gap8" style="font-size:11px">'
         +'<label style="display:flex;align-items:center;gap:4px;cursor:pointer'+(puedeEntregar?'':';opacity:.4')+'">'
-          +'<input type="checkbox" class="obra-cb-stock" data-global-idx="'+i+'" '+(puedeEntregar?'':'disabled')+'> '
-          +'✓ Entregar del stock'
+          +'<input type="checkbox" class="obra-cb-stock" data-global-idx="'+i+'"'+(puedeEntregar?' checked':' disabled')+'> '
+          +'✓ Entregar del stock'+(puedeEntregar?' ✓':'')
         +'</label>'
         +'<label style="display:flex;align-items:center;gap:4px;cursor:pointer">'
-          +'<input type="checkbox" class="obra-cb-oc" data-global-idx="'+i+'"> '
+          +'<input type="checkbox" class="obra-cb-oc" data-global-idx="'+i+'"'+(!puedeEntregar?' checked':'')+'> '
           +'🛒 Comprar (OC)'
         +'</label>'
       +'</div>'
@@ -3472,6 +3546,63 @@ async function abrirGestionObra(grupo){
 
   window._obraActual={grupo, allItems};
   showModal(h);
+}
+
+function autoLinkItems(items, stockMap){
+  // Build two search indexes from inventory:
+  // 1. Exact match by item_id
+  // 2. Fuzzy match by normalized description
+  const invByDesc={};
+  const normDesc=str=>String(str||"").toLowerCase()
+    .replace(/[áàäâ]/g,"a").replace(/[éèëê]/g,"e")
+    .replace(/[íìïî]/g,"i").replace(/[óòöô]/g,"o")
+    .replace(/[úùüû]/g,"u").replace(/ñ/g,"n")
+    .replace(/[^a-z0-9]/g," ").replace(/\s+/g," ").trim();
+
+  // Build index from stockMap (keys are item_ids)
+  // stockMap = { itemId: {stock, desc, uni, cat, prov} }
+  Object.entries(stockMap).forEach(([itemId, info])=>{
+    const nd=normDesc(info.desc);
+    if(!invByDesc[nd])invByDesc[nd]=itemId;
+  });
+
+  // Also build index from S.inv for broader matching
+  if(S.inv&&S.inv.length){
+    S.inv.forEach(i=>{
+      const nd=normDesc(i.descripcion);
+      if(!invByDesc[nd])invByDesc[nd]=i.item_id;
+    });
+  }
+
+  items.forEach(it=>{
+    if(it.itemId)return; // already has code
+    const nd=normDesc(it.desc);
+    if(!nd)return;
+
+    // Try exact normalized description match
+    if(invByDesc[nd]){
+      it.itemId=invByDesc[nd];
+      it._autoLinked=true;
+      return;
+    }
+
+    // Try partial match: if item description CONTAINS the search term or vice versa
+    const invEntries=Object.entries(invByDesc);
+    for(const [invDesc, invId] of invEntries){
+      if(!invDesc)continue;
+      // Check if one contains the other (handles "Certificadora Fluke" vs "Certificadora Fluke DSX-600")
+      if(invDesc.includes(nd)||nd.includes(invDesc)){
+        // Only match if similarity is high enough (> 60% of chars match)
+        const shorter=invDesc.length<nd.length?invDesc:nd;
+        const longer=invDesc.length>=nd.length?invDesc:nd;
+        if(shorter.length/longer.length>0.6){
+          it.itemId=invId;
+          it._autoLinked=true;
+          return;
+        }
+      }
+    }
+  });
 }
 
 function vincularItemConStock(globalIdx){
@@ -3800,6 +3931,9 @@ function abrirSolicitudDetalle(sol){
     }
     return false;
   }
+  // Auto-link items without itemId to inventory by name matching
+  autoLinkItems(items, stockMap);
+
   const materiales=[];
   const herramientas=[];
   items.forEach((it,i)=>{
