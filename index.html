@@ -3938,6 +3938,10 @@ async function ejecutarObraAccion(accion){
         nota:nota
       });
       if(res.remitoId)resultados.remitos.push(res.remitoId);
+      if(res.entregaId){
+        if(!resultados.entregas)resultados.entregas=[];
+        resultados.entregas.push(res.entregaId);
+      }
       resultados.itemsEnt+=res.itemsEntregados||0;
     }
 
@@ -4211,22 +4215,27 @@ async function ejecutarAccionSolicitud(repId, accion){
     });
 
     closeModal();
-    let msg="✓ Procesado: ";
     const parts=[];
-    if(res.itemsEntregados>0)parts.push(res.itemsEntregados+" entregado"+(res.itemsEntregados>1?"s":""));
+    if(res.itemsEntregados>0)parts.push(res.itemsEntregados+" ítem"+(res.itemsEntregados>1?"s":"")+" entregados");
     if(res.itemsOC>0)parts.push(res.itemsOC+" en OC");
-    msg+=parts.join(", ")+" · Estado: "+res.estado;
-    toast(msg);
+    toast("✓ "+parts.join(", ")+" · Estado: "+res.estado);
 
     // Show result modal with links
-    if(res.remitoId||res.ocIds.length){
+    if(res.remitoId||res.entregaId||(res.ocIds&&res.ocIds.length)){
       let resultH='<button class="mo-x" onclick="closeModal()">✕</button>'
         +'<div class="mo-t">✅ Documentos generados</div>'
-        +'<div class="al al-s mb12">Estado de la solicitud: <b>'+res.estado+'</b></div>';
+        +'<div class="al al-s mb12">Estado: <b>'+res.estado+'</b></div>';
       if(res.remitoId){
         resultH+='<div style="padding:10px;background:var(--card2);border-radius:8px;margin-bottom:8px">'
-          +'📄 <b>Remito '+res.remitoId+'</b> con '+res.itemsEntregados+' ítem'+(res.itemsEntregados>1?"s":"")+' entregados<br>'
+          +'📄 <b>Remito de materiales '+res.remitoId+'</b><br>'
+          +'<span class="xs mu">Emitido a nombre del cliente · stock descontado</span><br>'
           +'<button class="btn btn-gh btn-xs mt8" onclick="closeModal();goMod(\'remitos\')">Ver remito</button>'
+        +'</div>';
+      }
+      if(res.entregaId){
+        resultH+='<div style="padding:10px;background:rgba(167,139,250,.08);border:1px solid rgba(167,139,250,.3);border-radius:8px;margin-bottom:8px">'
+          +'🔧 <b>Entrega de herramientas '+res.entregaId+'</b><br>'
+          +'<span class="xs mu">Herramientas asignadas al técnico · aparecerán en sus tareas</span>'
         +'</div>';
       }
       if(res.ocIds.length){
