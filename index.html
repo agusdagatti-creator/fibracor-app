@@ -921,25 +921,76 @@ async function verHistItem(id){
     showModal(h);
   }catch(e){showModal(`<button class="mo-x" onclick="closeModal()">✕</button><div class="al al-d">${e.message}</div>`);}
 }
-function modalIngreso(){
-  const ocs=S.compras.filter(c=>c.estado==="Aprobado");
-  const ocOpts=ocs.map(c=>`<option value="${c.compra_id}">${c.compra_id} — ${c.descripcion||c.item_id}</option>`).join("");
-  const items=S.inv.map(i=>`<option value="${i.item_id}">${i.descripcion} (${i.item_id})</option>`).join("");
-  const obras=S.obras.filter(o=>o.estado==="En ejecución").map(o=>`<option value="${o.obra_id}">${o.obra_id} — ${o.cliente}</option>`).join("");
+async function modalIngreso(preselectOC){
+  // Load data if not cached
+  showModal(ldr());
+  try{
+    if(!S.compras||!S.compras.length){
+      try{const dC=await api("getCompras");S.compras=dC.compras||[];}catch(e){}
+    }
+    if(!S.inv||!S.inv.length){
+      try{const dI=await api("getInventario");S.inv=dI.items||[];}catch(e){}
+    }
+    if(!S.obras||!S.obras.length){
+      try{const dO=await api("getObras");S.obras=dO.obras||[];}catch(e){}
+    }
+  }catch(e){}
+
+  const ocs=(S.compras||[]).filter(c=>c.estado==="Aprobado");
+  const ocOpts=ocs.map(c=>{
+    const cant=c.cantidad_faltante||1;
+    const uni=c.unidad||"ud.";
+    return `<option value="${c.compra_id}">${c.compra_id} — ${c.descripcion||c.item_id} (${cant} ${uni})${c.proveedor?" · "+c.proveedor:""}</option>`;
+  }).join("");
+  const items=(S.inv||[]).map(i=>`<option value="${i.item_id}">${i.descripcion} (${i.item_id})</option>`).join("");
+  const obras=(S.obras||[]).filter(o=>o.estado==="En ejecución").map(o=>`<option value="${o.obra_id}">${o.obra_id} — ${o.cliente}</option>`).join("");
+
+  // If OC was preselected, default to OC mode
+  const tipoDefault=preselectOC?"oc":"libre";
+  const ocWrapHidden=preselectOC?"":"hidden";
+
   showModal(`<button class="mo-x" onclick="closeModal()">✕</button>
-    <div class="mo-t">+ Ingreso de mercadería</div>
+    <div class="mo-t">📥 Ingreso de mercadería</div>
+    ${ocs.length?'<div class="al al-i mb12">📋 Tenés <b>'+ocs.length+' OC'+(ocs.length>1?"s":"")+' aprobada'+(ocs.length>1?"s":"")+'</b> esperando ingreso</div>':""}
     <div class="fg"><label>TIPO DE INGRESO</label>
-    <select class="sel" id="ing-tipo" onchange="el('ing-oc-wrap').classList.toggle('hidden',this.value!=='oc')">
-    <option value="libre">Ingreso libre (sin OC)</option><option value="oc">Vinculado a Orden de Compra</option></select></div>
-    <div id="ing-oc-wrap" class="hidden"><div class="fg"><label>ORDEN DE COMPRA</label>
-    <select class="sel" id="ing-oc" onchange="autoFillDesdeOC()"><option value="">— elegir OC —</option>${ocOpts}</select></div></div>
-    <div class="fg"><label>ÍTEM *</label><select class="sel" id="ing-it"><option value="">— elegir —</option>${items}</select></div>
-    <div class="g2f"><div class="fg"><label>CANTIDAD *</label><input class="inp" type="number" id="ing-ca" min="1"></div>
-    <div class="fg"><label>DESTINO</label><select class="sel" id="ing-dest" onchange="el('ing-obra-wrap').classList.toggle('hidden',this.value!=='obra')">
-    <option value="stock">Stock general</option><option value="obra">Asignar a obra</option></select></div></div>
-    <div id="ing-obra-wrap" class="hidden"><div class="fg"><label>OBRA DESTINO</label><select class="sel" id="ing-obra"><option value="">—</option>${obras}</select></div></div>
+      <select class="sel" id="ing-tipo" onchange="el('ing-oc-wrap').classList.toggle('hidden',this.value!=='oc')">
+        <option value="libre"${tipoDefault==="libre"?" selected":""}>Ingreso libre (sin OC)</option>
+        <option value="oc"${tipoDefault==="oc"?" selected":""}>Vinculado a Orden de Compra</option>
+      </select>
+    </div>
+    <div id="ing-oc-wrap" class="${ocWrapHidden}">
+      <div class="fg"><label>ORDEN DE COMPRA</label>
+        <select class="sel" id="ing-oc" onchange="autoFillDesdeOC()">
+          <option value="">— elegir OC —</option>${ocOpts}
+        </select>
+        ${ocs.length===0?'<div class="xs mu mt4">⚠ No hay OCs aprobadas pendientes de ingreso</div>':""}
+      </div>
+    </div>
+    <div class="fg"><label>ÍTEM *</label>
+      <select class="sel" id="ing-it"><option value="">— elegir —</option>${items}</select>
+    </div>
+    <div class="g2f">
+      <div class="fg"><label>CANTIDAD *</label><input class="inp" type="number" id="ing-ca" min="0.01" step="0.01"></div>
+      <div class="fg"><label>DESTINO</label>
+        <select class="sel" id="ing-dest" onchange="el('ing-obra-wrap').classList.toggle('hidden',this.value!=='obra')">
+          <option value="stock">Stock general (pañol)</option>
+          <option value="obra">Asignar directo a obra</option>
+        </select>
+      </div>
+    </div>
+    <div id="ing-obra-wrap" class="hidden"><div class="fg"><label>OBRA DESTINO</label>
+      <select class="sel" id="ing-obra"><option value="">—</option>${obras}</select>
+    </div></div>
     <div class="fg"><label>REFERENCIA</label><input class="inp" id="ing-ref" placeholder="Factura, remito proveedor..."></div>
     <button class="btn btn-p btn-bl" onclick="saveIngreso()">Registrar ingreso</button>`);
+
+  // If preselected, fill the OC dropdown
+  if(preselectOC){
+    setTimeout(()=>{
+      const sel=document.getElementById("ing-oc");
+      if(sel){sel.value=preselectOC;autoFillDesdeOC();}
+    },100);
+  }
 }
 function autoFillDesdeOC(){
   const oc=S.compras.find(c=>c.compra_id===g("ing-oc"));
@@ -2050,15 +2101,7 @@ async function loadMT(){
 }
 
 function modalIngresoDesdeOC(ocId){
-  // Pre-fill modalIngreso with this OC selected
-  modalIngreso();
-  setTimeout(()=>{
-    const sel=document.getElementById("ing-tipo");
-    if(sel){sel.value="oc";document.getElementById("ing-oc-wrap")?.classList.remove("hidden");}
-    const ocSel=document.getElementById("ing-oc");
-    if(ocSel)ocSel.value=ocId;
-    if(typeof autoFillDesdeOC==="function")autoFillDesdeOC();
-  },200);
+  modalIngreso(ocId); // pass preselected OC
 }
 
 function modalReporteDiario(obraId,cliente){
@@ -2537,48 +2580,54 @@ async function loadSolicitudes(filtro){
           +'</div>'
         +'</div>';
 
-      // Each solicitud as a card
-      g.solicitudes.forEach(function(sol,solIdx){
-        const items=sol.items_parsed||[];
+      // Aggregate stats per obra
+      var obraTotalItems=0,obraEntregados=0,obraOC=0,obraPendientes=0;
+      var pendientes=g.solicitudes.filter(function(sol){return sol.estado_solicitud!=="Atendido";});
+      var atendidas=g.solicitudes.filter(function(sol){return sol.estado_solicitud==="Atendido";});
+      g.solicitudes.forEach(function(sol){
+        obraTotalItems+=sol.total_items||0;
+        obraEntregados+=sol.items_entregados||0;
+        obraOC+=sol.items_oc||0;
+        obraPendientes+=sol.items_pendientes||0;
+      });
+
+      // Obra-level summary
+      if(obraTotalItems>0){
+        const pctEnt=Math.round(obraEntregados/obraTotalItems*100);
+        const pctOC=Math.round(obraOC/obraTotalItems*100);
+        html+='<div style="padding:0 4px"><div style="display:flex;height:8px;border-radius:4px;overflow:hidden;background:var(--border);margin-bottom:8px">'
+          +'<div style="width:'+pctEnt+'%;background:var(--ag)" title="Entregados"></div>'
+          +'<div style="width:'+pctOC+'%;background:var(--ay)" title="En OC"></div>'
+        +'</div>'
+        +'<div class="xs mu mb12">📦 Total: '+obraTotalItems+' ítems · ✓ '+obraEntregados+' entregados · 🛒 '+obraOC+' en OC · ⏳ '+obraPendientes+' pendientes</div></div>';
+      }
+
+      // Big action button at obra level
+      if(pendientes.length>0&&obraPendientes>0){
+        html+='<button class="btn btn-p btn-bl" data-sol-action="open-obra" data-obra-id="'+obraId+'" style="margin-bottom:10px">'
+          +'⚡ Procesar pedidos de esta obra ('+obraPendientes+' ítems pendientes)</button>';
+      }
+
+      // List of individual solicitudes (collapsed)
+      g.solicitudes.forEach(function(sol){
         const ent=sol.items_entregados||0;
         const oc=sol.items_oc||0;
-        const pend=sol.items_pendientes||items.length;
-        const total=sol.total_items||items.length;
+        const pend=sol.items_pendientes||0;
+        const total=sol.total_items||0;
 
-        const estadoBadge=sol.estado_solicitud==="Atendido"?'<span class="badge b-green">✓ Atendida</span>'
-          :sol.estado_solicitud==="Parcial"?'<span class="badge b-amber">⏳ Parcial</span>'
-          :'<span class="badge b-blue">📋 Pendiente</span>';
+        const estadoBadge=sol.estado_solicitud==="Atendido"?'<span class="badge b-green">✓</span>'
+          :sol.estado_solicitud==="Parcial"?'<span class="badge b-amber">⏳</span>'
+          :'<span class="badge b-blue">📋</span>';
 
-        html+='<div style="border:1px solid var(--border2);border-radius:8px;padding:12px;margin-bottom:8px">'
-          +'<div class="flex between mb8" style="flex-wrap:wrap;gap:6px">'
-            +'<div><span class="bold sm">'+sol.reporte_id+'</span>'
-              +' <span class="xs mu">por '+(sol.tecnico_nombre||"")+'</span></div>'
-            +'<div class="flex gap8">'+estadoBadge
-              +'<span class="xs mu">'+(sol.fecha||"").split("T")[0]+'</span>'
-            +'</div>'
-          +'</div>';
-
-        // Progress bar
-        if(total>0){
-          const pctEnt=Math.round(ent/total*100);
-          const pctOC=Math.round(oc/total*100);
-          html+='<div style="display:flex;height:6px;border-radius:3px;overflow:hidden;background:var(--border);margin-bottom:8px">'
-            +'<div style="width:'+pctEnt+'%;background:var(--ag)"></div>'
-            +'<div style="width:'+pctOC+'%;background:var(--ay)"></div>'
+        html+='<div style="border:1px solid var(--border);border-radius:6px;padding:8px 10px;margin-bottom:6px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">'
+          +estadoBadge
+          +'<div style="flex:1;min-width:180px"><span class="xs bold">'+sol.reporte_id+'</span>'
+            +' <span class="xs mu">'+(sol.tecnico_nombre||"")+' · '+(sol.fecha||"").split("T")[0]+'</span>'
+            +(sol.descripcion?'<div class="xs mu">📝 '+sol.descripcion+'</div>':'')
           +'</div>'
-          +'<div class="xs mu mb8">📦 '+total+' ítems · ✓ '+ent+' entregados · 🛒 '+oc+' en OC · ⏳ '+pend+' pendientes</div>';
-        }
-
-        if(sol.descripcion)html+='<div class="xs mu mb8">📝 '+sol.descripcion+'</div>';
-
-        // Action button
-        if(sol.estado_solicitud!=="Atendido"){
-          html+='<button class="btn btn-p btn-sm" data-sol-action="open" data-obra-id="'+obraId+'" data-sol-id="'+sol.reporte_id+'">📋 Abrir solicitud completa</button>';
-        }else{
-          html+='<button class="btn btn-gh btn-sm" data-sol-action="open" data-obra-id="'+obraId+'" data-sol-id="'+sol.reporte_id+'">👁 Ver detalle</button>';
-        }
-
-        html+='</div>';
+          +'<span class="xs mu">'+total+' ítems</span>'
+          +'<button class="btn btn-gh btn-xs" data-sol-action="open" data-obra-id="'+obraId+'" data-sol-id="'+sol.reporte_id+'">👁 Ver</button>'
+        +'</div>';
       });
 
       html+='</div>';
@@ -2590,17 +2639,280 @@ async function loadSolicitudes(filtro){
       const btn=e.target.closest("[data-sol-action]");
       if(!btn)return;
       const obraId=btn.dataset.obraId;
-      const solId=btn.dataset.solId;
+      const action=btn.dataset.solAction;
       const grupo=window._solGrupos[obraId];
       if(!grupo)return;
-      const sol=grupo.solicitudes.find(s=>s.reporte_id===solId);
-      if(sol)abrirSolicitudDetalle(sol);
+
+      if(action==="open-obra"){
+        // Open unified modal with all items from all solicitudes of this obra
+        abrirGestionObra(grupo);
+        return;
+      }
+      if(action==="open"){
+        const solId=btn.dataset.solId;
+        const sol=grupo.solicitudes.find(s=>s.reporte_id===solId);
+        if(sol)abrirSolicitudDetalle(sol);
+      }
     };
 
   }catch(e){
     dEl.innerHTML='<div class="al al-d">'+e.message+'<br><button class="btn btn-p btn-sm mt8" onclick="loadSolicitudes()">Reintentar</button></div>';
   }
 }
+
+
+function abrirGestionObra(grupo){
+  // Aggregate all items from all pending solicitudes of this obra
+  // Each item carries reference to its source solicitud
+  const allItems=[];
+  grupo.solicitudes.forEach(function(sol){
+    if(sol.estado_solicitud==="Atendido")return; // skip completed
+    const items=sol.items_parsed||[];
+    items.forEach(function(it,localIdx){
+      if(it.estado==="entregado"||it.estado==="oc")return; // skip already resolved
+      allItems.push({
+        ...it,
+        _solId: sol.reporte_id,
+        _localIdx: localIdx,
+        _tecnico: sol.tecnico_nombre||"",
+        _fecha: sol.fecha||"",
+        _prioridad: sol.prioridad||"Normal"
+      });
+    });
+  });
+
+  if(!allItems.length){
+    showModal('<button class="mo-x" onclick="closeModal()">✕</button>'
+      +'<div class="mo-t">Sin ítems pendientes</div>'
+      +'<div class="al al-i">No hay ítems pendientes en las solicitudes de esta obra.</div>');
+    return;
+  }
+
+  // Build stock map
+  const stockMap={};
+  if(S.inv&&S.inv.length){
+    S.inv.forEach(i=>{stockMap[i.item_id]={stock:parseFloat(i.stock_disponible)||0,desc:i.descripcion,uni:i.unidad||"ud.",cat:i.categoria||""};});
+  }
+
+  function esHerramienta(it){
+    if(it.itemId&&stockMap[it.itemId]){
+      const cat=stockMap[it.itemId].cat;
+      return cat==="Herramienta"||cat==="Reutilizable";
+    }
+    return false;
+  }
+
+  // Classify
+  const materiales=[];
+  const herramientas=[];
+  allItems.forEach((it,i)=>{
+    it._globalIdx=i;
+    if(esHerramienta(it))herramientas.push(it);
+    else materiales.push(it);
+  });
+
+  function renderRow(it){
+    const i=it._globalIdx;
+    const stockInfo=it.itemId?stockMap[it.itemId]:null;
+    const stockDisp=stockInfo?stockInfo.stock:null;
+    const cantNeed=parseFloat(it.cant)||1;
+
+    let stockBadge="";
+    if(stockInfo===null||!it.itemId){
+      stockBadge='<span class="badge b-gray" style="font-size:10px">Sin código</span>';
+    }else if(stockDisp>=cantNeed){
+      stockBadge='<span class="badge b-green" style="font-size:10px">✓ Stock: '+stockDisp+'</span>';
+    }else if(stockDisp>0){
+      stockBadge='<span class="badge b-amber" style="font-size:10px">⚠ Solo '+stockDisp+'</span>';
+    }else{
+      stockBadge='<span class="badge b-red" style="font-size:10px">✗ Sin stock</span>';
+    }
+
+    const puedeEntregar=stockInfo&&stockDisp>=cantNeed;
+
+    const urgClr=it._prioridad==="Urgente"?"#ef4444":it._prioridad==="Alta"?"#f59e0b":"";
+
+    return '<div style="border:1px solid '+(urgClr||'var(--border)')+';border-radius:6px;padding:10px;margin-bottom:6px" data-global-idx="'+i+'">'
+      +'<div class="flex between mb6" style="flex-wrap:wrap;gap:6px">'
+        +'<div style="flex:1;min-width:200px">'
+          +'<span class="sm bold">'+it.desc+'</span>'
+          +' <span class="xs mu">'+cantNeed+' '+(it.uni||"ud.")+'</span>'
+          +'<div class="xs mu">📋 '+it._solId+' · 👷 '+it._tecnico
+            +(it._prioridad==="Urgente"?' · <span style="color:#ef4444">⚠ URGENTE</span>':'')
+            +(it._prioridad==="Alta"?' · <span style="color:#f59e0b">Alta</span>':'')
+          +'</div>'
+          +(it.obs?'<div class="xs mu">📝 '+it.obs+'</div>':'')
+        +'</div>'
+        +stockBadge
+      +'</div>'
+      +'<div class="flex gap8" style="font-size:11px">'
+        +'<label style="display:flex;align-items:center;gap:4px;cursor:pointer'+(puedeEntregar?'':';opacity:.4')+'">'
+          +'<input type="checkbox" class="obra-cb-stock" data-global-idx="'+i+'" '+(puedeEntregar?'':'disabled')+'> '
+          +'✓ Entregar del stock'
+        +'</label>'
+        +'<label style="display:flex;align-items:center;gap:4px;cursor:pointer">'
+          +'<input type="checkbox" class="obra-cb-oc" data-global-idx="'+i+'"> '
+          +'🛒 Comprar (OC)'
+        +'</label>'
+      +'</div>'
+    +'</div>';
+  }
+
+  let h='<button class="mo-x" onclick="closeModal()">✕</button>'
+    +'<div class="mo-t">⚡ Gestionar pedidos de obra</div>'
+    +'<div class="xs mu mb12">🏗 '+grupo.obra+(grupo.cliente?' — '+grupo.cliente:'')
+      +' · '+grupo.solicitudes.length+' solicitud'+(grupo.solicitudes.length>1?'es':'')+' · '+allItems.length+' ítems pendientes</div>';
+
+  // Quick action buttons
+  h+='<div class="flex gap8 mb12" style="flex-wrap:wrap">'
+    +'<button class="btn btn-gh btn-xs" onclick="marcarTodosObra(\'stock\')">✓ Marcar todos los disponibles para entregar</button>'
+    +'<button class="btn btn-gh btn-xs" onclick="marcarTodosObra(\'oc\')">🛒 Marcar todos los faltantes para OC</button>'
+    +'<button class="btn btn-gh btn-xs" onclick="limpiarTodosObra()">⊘ Limpiar selección</button>'
+  +'</div>';
+
+  if(materiales.length){
+    h+='<div class="ct" style="margin-top:12px">📦 Materiales / Insumos ('+materiales.length+')</div>';
+    materiales.forEach(it=>{ h+=renderRow(it); });
+  }
+  if(herramientas.length){
+    h+='<div class="ct" style="margin-top:12px">🔧 Herramientas / Reutilizables ('+herramientas.length+')</div>';
+    herramientas.forEach(it=>{ h+=renderRow(it); });
+  }
+
+  h+='<div style="border-top:1px solid var(--border);padding-top:12px;margin-top:12px">'
+    +'<div class="fg"><label>OBSERVACIÓN PARA REMITO (opcional)</label>'
+      +'<input class="inp" id="obra-nota-remito" placeholder="Ej: Entregado en obra...">'
+    +'</div>'
+    +'<div class="fg"><label>PROVEEDOR PARA OC (opcional)</label>'
+      +'<input class="inp" id="obra-prov-oc" placeholder="Nombre del proveedor...">'
+    +'</div>'
+    +'<div class="flex gap8 wrap" style="margin-top:12px">'
+      +'<button class="btn btn-g btn-sm" onclick="ejecutarObraAccion(\'stock\')">✓ Entregar seleccionados</button>'
+      +'<button class="btn btn-warn btn-sm" onclick="ejecutarObraAccion(\'oc\')">🛒 Comprar seleccionados</button>'
+      +'<button class="btn btn-p btn-sm" onclick="ejecutarObraAccion(\'ambos\')">⚡ Ejecutar todo</button>'
+    +'</div>'
+    +'<div class="xs mu mt8">⚡ "Ejecutar todo" procesa los marcados como stock Y los marcados como OC en una sola acción.</div>'
+  +'</div>';
+
+  window._obraActual={grupo, allItems};
+  showModal(h);
+}
+
+function marcarTodosObra(tipo){
+  const items=window._obraActual?.allItems||[];
+  const stockMap={};
+  if(S.inv&&S.inv.length){
+    S.inv.forEach(i=>{stockMap[i.item_id]={stock:parseFloat(i.stock_disponible)||0};});
+  }
+  items.forEach(it=>{
+    const stockInfo=it.itemId?stockMap[it.itemId]:null;
+    const stockDisp=stockInfo?stockInfo.stock:null;
+    const cantNeed=parseFloat(it.cant)||1;
+    const tieneStock=stockInfo&&stockDisp>=cantNeed;
+
+    const cbStock=document.querySelector('.obra-cb-stock[data-global-idx="'+it._globalIdx+'"]');
+    const cbOC=document.querySelector('.obra-cb-oc[data-global-idx="'+it._globalIdx+'"]');
+
+    if(tipo==="stock"){
+      if(cbStock&&!cbStock.disabled&&tieneStock){cbStock.checked=true;if(cbOC)cbOC.checked=false;}
+    }else if(tipo==="oc"){
+      if(!tieneStock&&cbOC){cbOC.checked=true;if(cbStock)cbStock.checked=false;}
+    }
+  });
+}
+
+function limpiarTodosObra(){
+  document.querySelectorAll(".obra-cb-stock,.obra-cb-oc").forEach(cb=>cb.checked=false);
+}
+
+async function ejecutarObraAccion(accion){
+  const stockChecks=document.querySelectorAll(".obra-cb-stock:checked");
+  const ocChecks=document.querySelectorAll(".obra-cb-oc:checked");
+
+  const allItems=window._obraActual?.allItems||[];
+  let stockGlobalIdx=Array.from(stockChecks).map(cb=>parseInt(cb.dataset.globalIdx));
+  let ocGlobalIdx=Array.from(ocChecks).map(cb=>parseInt(cb.dataset.globalIdx));
+
+  if(accion==="stock")ocGlobalIdx=[];
+  else if(accion==="oc")stockGlobalIdx=[];
+
+  if(stockGlobalIdx.length===0&&ocGlobalIdx.length===0){
+    toast("Marcá al menos un ítem");return;
+  }
+
+  // Group by source solicitud
+  const bySol={};
+  stockGlobalIdx.forEach(gi=>{
+    const it=allItems[gi];
+    if(!it)return;
+    if(!bySol[it._solId])bySol[it._solId]={stock:[],oc:[]};
+    bySol[it._solId].stock.push(it._localIdx);
+  });
+  ocGlobalIdx.forEach(gi=>{
+    const it=allItems[gi];
+    if(!it)return;
+    if(!bySol[it._solId])bySol[it._solId]={stock:[],oc:[]};
+    bySol[it._solId].oc.push(it._localIdx);
+  });
+
+  const nota=document.getElementById("obra-nota-remito")?.value||"";
+  const prov=document.getElementById("obra-prov-oc")?.value||"";
+
+  const btn=event.target;
+  if(btn){btn.disabled=true;btn.textContent="Procesando...";}
+
+  const resultados={remitos:[],ocs:[],itemsEnt:0,itemsOC:0,solsAtendidas:0};
+
+  try{
+    // Process each solicitud independently
+    for(const solId of Object.keys(bySol)){
+      const grp=bySol[solId];
+      const res=await api("procesarSolicitudParcial",{
+        reporte_id:solId,
+        items_idx_stock:JSON.stringify(grp.stock),
+        items_idx_oc:JSON.stringify(grp.oc),
+        proveedor:prov,
+        nota:nota
+      });
+      if(res.remitoId)resultados.remitos.push(res.remitoId);
+      if(res.ocIds&&res.ocIds.length)resultados.ocs.push(...res.ocIds);
+      resultados.itemsEnt+=res.itemsEntregados||0;
+      resultados.itemsOC+=res.itemsOC||0;
+      if(res.estado==="Atendido")resultados.solsAtendidas++;
+    }
+
+    closeModal();
+
+    // Show summary
+    let summaryH='<button class="mo-x" onclick="closeModal()">✕</button>'
+      +'<div class="mo-t">✅ Pedidos procesados</div>'
+      +'<div class="al al-s mb12">Procesados items de '+Object.keys(bySol).length+' solicitud'+(Object.keys(bySol).length>1?"es":"")+'</div>';
+    if(resultados.remitos.length){
+      summaryH+='<div style="padding:10px;background:var(--card2);border-radius:8px;margin-bottom:8px">'
+        +'📄 <b>'+resultados.remitos.length+' Remito'+(resultados.remitos.length>1?"s":"")+' generado'+(resultados.remitos.length>1?"s":"")+'</b>: '+resultados.remitos.join(", ")+'<br>'
+        +'<span class="xs mu">'+resultados.itemsEnt+' ítems entregados</span><br>'
+        +'<button class="btn btn-gh btn-xs mt8" onclick="closeModal();goMod(\'remitos\')">Ver remitos</button>'
+      +'</div>';
+    }
+    if(resultados.ocs.length){
+      summaryH+='<div style="padding:10px;background:var(--card2);border-radius:8px;margin-bottom:8px">'
+        +'🛒 <b>'+resultados.ocs.length+' OC'+(resultados.ocs.length>1?"s":"")+' generada'+(resultados.ocs.length>1?"s":"")+'</b>: '+resultados.ocs.join(", ")+'<br>'
+        +'<span class="xs mu">'+resultados.itemsOC+' ítems para comprar · pendiente aprobación</span><br>'
+        +'<button class="btn btn-gh btn-xs mt8" onclick="closeModal();goMod(\'compras\')">Ver OCs</button>'
+      +'</div>';
+    }
+    summaryH+='<button class="btn btn-p btn-bl mt8" onclick="closeModal();loadSolicitudes()">Volver a solicitudes</button>';
+    setTimeout(()=>showModal(summaryH),200);
+
+    toast("✓ Procesado: "+resultados.itemsEnt+" entregados, "+resultados.itemsOC+" en OC");
+    loadSolicitudes(document.querySelector("#sol-chips .chip.active")?.dataset.filter||"");
+
+  }catch(e){
+    if(btn){btn.disabled=false;btn.textContent="Procesar";}
+    toast("Error: "+e.message);
+  }
+}
+
 
 function abrirSolicitudDetalle(sol){
   const items=sol.items_parsed||[];
