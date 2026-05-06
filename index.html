@@ -1526,28 +1526,279 @@ function renderProveedores(lista){
   };
 }
 async function verProveedor(id){
-  const reqId=++_modalReqId;showModal(ldr());
+  const reqId=++_modalReqId;
+  showModal(ldr());
   try{
-    const d=await api("getProveedorDetalle",{proveedor_id:id}),p=d.proveedor,ocs=d.ordenes||[];
+    const d=await api("getProveedorDetalle",{proveedor_id:id});
+    if(reqId!==_modalReqId)return;
+    const p=d.proveedor;
+    const ocs=d.ordenes||[];
     const vP=S.user.puede?.ver_precios;
-    const ec={Solicitado:"b-amber",Aprobado:"b-green",Recibido:"b-gray"};
-    let h=`<button class="mo-x" onclick="closeModal()">✕</button>
-      <div class="mo-t">${p.nombre}</div>
-      <div class="card mb12"><div class="g2f">
-        <div><div class="xs mu">Teléfono</div><div class="sm">${p.telefono||"—"}</div></div>
-        <div><div class="xs mu">WhatsApp</div><div class="sm">${p.whatsapp||"—"}</div></div>
-        <div><div class="xs mu">Ciudad</div><div class="sm">${p.ciudad||"—"}</div></div>
-        <div><div class="xs mu">Cond. pago</div><div class="sm">${p.condiciones_pago||"—"}</div></div>
-      </div>${p.productos?`<div class="sm mt8">Productos: ${p.productos}</div>`:""}</div>
-      <div class="ct">📋 Órdenes de compra (${ocs.length})</div>`;
-    if(!ocs.length)h+=`<div class="mu sm">Sin órdenes asignadas.</div>`;
-    else ocs.forEach(oc=>{h+=`<div class="li"><div class="flex between mb8"><span class="bold">${oc.compra_id}</span><span class="badge ${ec[oc.estado]||"b-gray"}">${oc.estado}</span></div>
-      <div class="sm">${oc.descripcion||""} · ${oc.cantidad_faltante} ${oc.unidad||""}</div>
-      ${vP&&parseFloat(oc.precio_unitario)>0?`<div class="xs mu mt4">$${parseFloat(oc.precio_unitario).toLocaleString("es-AR")}/u</div>`:""}
-      <button class="btn btn-gh btn-xs mt4" onclick="verOC('${oc.compra_id}')">📄 Ver OC</button></div>`;});
-    h+=`<button class="btn btn-p btn-sm mt8" onclick="closeModal();modalCompraDesdeProveedor('${id}','${p.nombre.replace(/'/g,"\\'")}')">+ Nueva OC</button>`;
+
+    // Categorize
+    const pendientes=ocs.filter(o=>o.estado==="Aprobado"||o.estado==="Parcial");
+    const solicitadas=ocs.filter(o=>o.estado==="Solicitado");
+    const recibidas=ocs.filter(o=>o.estado==="Recibido");
+    const otras=ocs.filter(o=>["Aprobado","Parcial","Solicitado","Recibido"].indexOf(o.estado)<0);
+
+    let h='<button class="mo-x" onclick="closeModal()">✕</button>'
+      +'<div class="mo-t">🏭 '+p.nombre+'</div>'
+      +'<div class="card mb12"><div class="g2f">'
+        +'<div><div class="xs mu">Teléfono</div><div class="sm">'+(p.telefono||"—")+'</div></div>'
+        +'<div><div class="xs mu">WhatsApp</div><div class="sm">'+(p.whatsapp||"—")+'</div></div>'
+        +'<div><div class="xs mu">Ciudad</div><div class="sm">'+(p.ciudad||"—")+'</div></div>'
+        +'<div><div class="xs mu">Cond. pago</div><div class="sm">'+(p.condiciones_pago||"—")+'</div></div>'
+      +'</div>'
+      +(p.productos?'<div class="sm mt8">Productos: '+p.productos+'</div>':'')
+      +'</div>';
+
+    // Section: pendientes de ingreso (highlighted)
+    if(pendientes.length){
+      h+='<div class="card mb12" style="border-color:rgba(34,197,94,.4);background:rgba(34,197,94,.04)">'
+        +'<div class="ct" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">'
+          +'<span>📥 Pendientes de ingreso al stock ('+pendientes.length+')</span>'
+          +'<button class="btn btn-p btn-sm" onclick="modalIngresoMasivoProveedor(\''+id+'\')">⚡ Ingresar masivo</button>'
+        +'</div>'
+        +'<div class="xs mu mb8">Click en una OC para ingresar su mercadería al stock</div>';
+      pendientes.forEach(oc=>{
+        const ing=oc.cantidad_ingresada_real||0;
+        const total=parseFloat(oc.cantidad_faltante)||0;
+        const pend=oc.cantidad_pendiente||0;
+        const pct=oc.porcentaje_recibido||0;
+        const estClass=oc.estado==="Parcial"?"b-amber":"b-green";
+        h+='<div style="border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:8px">'
+          +'<div class="flex between mb6" style="flex-wrap:wrap;gap:6px">'
+            +'<span class="bold">'+oc.compra_id+'</span>'
+            +'<span class="badge '+estClass+'">'+oc.estado+'</span>'
+          +'</div>'
+          +'<div class="sm mb6">'+(oc.descripcion||oc.item_id||"")+'</div>'
+          +(total>0?'<div style="display:flex;height:6px;border-radius:3px;overflow:hidden;background:var(--border);margin-bottom:6px"><div style="width:'+pct+'%;background:var(--ag)"></div></div>':"")
+          +'<div class="xs mu mb8">📦 Total: '+total+' '+(oc.unidad||"ud.")+' · ✓ Ingresado: '+ing+' · ⏳ <b>Pendiente: '+pend+'</b></div>'
+          +(vP&&parseFloat(oc.precio_unitario)>0?'<div class="xs mu mb8">$'+parseFloat(oc.precio_unitario).toLocaleString("es-AR")+'/u</div>':"")
+          +'<div class="flex gap8 wrap">'
+            +'<button class="btn btn-g btn-xs" onclick="ingresarRapidoOC(\''+oc.compra_id+'\','+pend+',\''+id+'\')">⚡ Ingresar todo el saldo ('+pend+' '+(oc.unidad||"ud.")+')</button>'
+            +'<button class="btn btn-gh btn-xs" onclick="modalIngresoOCParcial(\''+oc.compra_id+'\','+pend+',\''+id+'\')">📥 Ingreso parcial</button>'
+            +'<button class="btn btn-gh btn-xs" onclick="verOC(\''+oc.compra_id+'\')">📄 Ver OC</button>'
+          +'</div>'
+        +'</div>';
+      });
+      h+='</div>';
+    }
+
+    // Section: solicitadas (waiting approval)
+    if(solicitadas.length){
+      h+='<div class="card mb12">'
+        +'<div class="ct">⏳ Solicitadas (esperando aprobación) ('+solicitadas.length+')</div>';
+      solicitadas.forEach(oc=>{
+        h+='<div style="border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:6px">'
+          +'<div class="flex between mb4"><span class="bold">'+oc.compra_id+'</span><span class="badge b-amber">Solicitado</span></div>'
+          +'<div class="sm">'+(oc.descripcion||oc.item_id||"")+' · '+oc.cantidad_faltante+' '+(oc.unidad||"")+'</div>'
+          +'<button class="btn btn-gh btn-xs mt4" onclick="verOC(\''+oc.compra_id+'\')">📄 Ver OC</button>'
+        +'</div>';
+      });
+      h+='</div>';
+    }
+
+    // Section: recibidas (history)
+    if(recibidas.length){
+      h+='<div class="card mb12" style="opacity:.7">'
+        +'<div class="ct">✓ Recibidas ('+recibidas.length+')</div>'
+        +'<div class="xs mu mb8">Historial de OCs ya ingresadas al stock</div>';
+      recibidas.slice(0,10).forEach(oc=>{
+        h+='<div style="border:1px solid var(--border);border-radius:6px;padding:8px;margin-bottom:4px">'
+          +'<div class="flex between"><span class="sm bold">'+oc.compra_id+'</span><span class="badge b-gray">Recibido</span></div>'
+          +'<div class="xs mu">'+(oc.descripcion||oc.item_id||"")+' · '+oc.cantidad_faltante+' '+(oc.unidad||"")+'</div>'
+        +'</div>';
+      });
+      if(recibidas.length>10)h+='<div class="xs mu">+ '+(recibidas.length-10)+' más...</div>';
+      h+='</div>';
+    }
+
+    if(otras.length){
+      h+='<div class="card mb12" style="opacity:.6">'
+        +'<div class="ct">Otras ('+otras.length+')</div>';
+      otras.forEach(oc=>{
+        h+='<div style="border:1px solid var(--border);border-radius:6px;padding:8px;margin-bottom:4px">'
+          +'<div class="flex between"><span class="sm bold">'+oc.compra_id+'</span><span class="badge b-gray">'+oc.estado+'</span></div>'
+        +'</div>';
+      });
+      h+='</div>';
+    }
+
+    if(!ocs.length){
+      h+='<div class="mu sm">Sin órdenes asignadas a este proveedor.</div>';
+    }
+
+    h+='<button class="btn btn-p btn-sm mt8" onclick="closeModal();modalCompraDesdeProveedor(\''+id+'\',\''+(p.nombre||"").replace(/\'/g,"\\'")+'\')">+ Nueva OC</button>';
+
+    showModalSafe(h,reqId);
+  }catch(e){
+    showModalSafe('<button class="mo-x" onclick="closeModal()">✕</button><div class="al al-d">'+e.message+'</div>',reqId);
+  }
+}
+
+async function ingresarRapidoOC(ocId, pend, provId){
+  if(!confirm("¿Ingresar al stock las "+pend+" unidades pendientes de la OC "+ocId+"?"))return;
+  try{
+    await api("ingresarOCCompleta",{
+      oc_id:ocId,
+      cantidad:pend,
+      referencia:"OC "+ocId
+    });
+    toast("✓ Ingresadas "+pend+" unidades al stock");
+    // Reload provider view
+    closeModal();
+    setTimeout(()=>verProveedor(provId),200);
+  }catch(e){toast("Error: "+e.message);}
+}
+
+function modalIngresoOCParcial(ocId, pendiente, provId){
+  showModal('<button class="mo-x" onclick="closeModal();verProveedor(\''+provId+'\')">✕</button>'
+    +'<div class="mo-t">📥 Ingreso parcial — '+ocId+'</div>'
+    +'<div class="al al-i mb12">Saldo pendiente: <b>'+pendiente+' unidades</b>. Ingresá la cantidad recibida en este envío.</div>'
+    +'<div class="fg"><label>CANTIDAD A INGRESAR *</label>'
+      +'<input class="inp" type="number" id="iop-cant" min="0.01" step="0.01" max="'+pendiente+'" value="'+pendiente+'">'
+    +'</div>'
+    +'<div class="fg"><label>REFERENCIA (factura, remito proveedor)</label>'
+      +'<input class="inp" id="iop-ref" placeholder="Ej: FA 0001-00012345...">'
+    +'</div>'
+    +'<button class="btn btn-p btn-bl" onclick="confirmarIngresoParcial(\''+ocId+'\','+pendiente+',\''+provId+'\')">📥 Confirmar ingreso</button>');
+}
+
+async function confirmarIngresoParcial(ocId, pendiente, provId){
+  const cant=parseFloat(document.getElementById("iop-cant")?.value)||0;
+  if(cant<=0){toast("Ingresá una cantidad válida");return;}
+  if(cant>pendiente){toast("No podés ingresar más de "+pendiente+" (pendiente)");return;}
+  const ref=document.getElementById("iop-ref")?.value||"";
+  try{
+    await api("ingresarOCCompleta",{
+      oc_id:ocId,
+      cantidad:cant,
+      referencia:ref
+    });
+    closeModal();
+    toast("✓ Ingresadas "+cant+" unidades al stock");
+    setTimeout(()=>verProveedor(provId),200);
+  }catch(e){toast("Error: "+e.message);}
+}
+
+async function modalIngresoMasivoProveedor(provId){
+  showModal(ldr());
+  try{
+    const d=await api("getProveedorDetalle",{proveedor_id:provId});
+    const p=d.proveedor;
+    const ocs=(d.ordenes||[]).filter(o=>o.estado==="Aprobado"||o.estado==="Parcial");
+
+    if(!ocs.length){
+      showModal('<button class="mo-x" onclick="closeModal();verProveedor(\''+provId+'\')">✕</button>'
+        +'<div class="al al-i">No hay OCs pendientes de ingreso de este proveedor.</div>');
+      return;
+    }
+
+    let h='<button class="mo-x" onclick="closeModal();verProveedor(\''+provId+'\')">✕</button>'
+      +'<div class="mo-t">⚡ Ingreso masivo — '+p.nombre+'</div>'
+      +'<div class="al al-i mb12">Marcá las OCs que recibiste y ajustá cantidades si fue ingreso parcial.</div>'
+      +'<div class="flex gap8 mb12 wrap">'
+        +'<button class="btn btn-gh btn-xs" onclick="masivoMarcarTodos(true)">✓ Marcar todas</button>'
+        +'<button class="btn btn-gh btn-xs" onclick="masivoMarcarTodos(false)">⊘ Desmarcar todas</button>'
+        +'<button class="btn btn-gh btn-xs" onclick="masivoCantTotal()">📦 Llenar con saldo total</button>'
+      +'</div>';
+
+    ocs.forEach((oc,i)=>{
+      const ing=oc.cantidad_ingresada_real||0;
+      const total=parseFloat(oc.cantidad_faltante)||0;
+      const pend=oc.cantidad_pendiente||0;
+      const pct=oc.porcentaje_recibido||0;
+      h+='<div style="border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:8px" data-oc-row="'+i+'">'
+        +'<div class="flex between mb6" style="flex-wrap:wrap;gap:6px">'
+          +'<label style="display:flex;align-items:center;gap:6px;cursor:pointer">'
+            +'<input type="checkbox" class="masivo-cb" data-oc-id="'+oc.compra_id+'" data-pend="'+pend+'">'
+            +'<span class="bold">'+oc.compra_id+'</span>'
+          +'</label>'
+          +'<span class="badge '+(oc.estado==="Parcial"?"b-amber":"b-green")+'">'+oc.estado+'</span>'
+        +'</div>'
+        +'<div class="sm mb4">'+(oc.descripcion||oc.item_id||"")+'</div>'
+        +(total>0?'<div style="display:flex;height:6px;border-radius:3px;overflow:hidden;background:var(--border);margin-bottom:6px"><div style="width:'+pct+'%;background:var(--ag)"></div></div>':"")
+        +'<div class="flex between" style="flex-wrap:wrap;gap:8px;align-items:center">'
+          +'<span class="xs mu">Ingresado: '+ing+' / '+total+' '+(oc.unidad||"ud.")+'</span>'
+          +'<div style="display:flex;align-items:center;gap:6px">'
+            +'<label class="xs mu">Cant. a ingresar:</label>'
+            +'<input class="inp masivo-cant" type="number" min="0" step="0.01" max="'+pend+'" data-oc-id="'+oc.compra_id+'" value="'+pend+'" style="width:90px">'
+            +'<span class="xs mu">/ '+pend+'</span>'
+          +'</div>'
+        +'</div>'
+      +'</div>';
+    });
+
+    h+='<div class="fg mt12"><label>REFERENCIA (común a todas)</label>'
+      +'<input class="inp" id="masivo-ref" placeholder="Ej: Remito proveedor #X...">'
+    +'</div>'
+    +'<button class="btn btn-p btn-bl mt8" onclick="confirmarIngresoMasivo(\''+provId+'\')">📥 Procesar ingreso masivo</button>';
+
     showModal(h);
-  }catch(e){showModal(`<button class="mo-x" onclick="closeModal()">✕</button><div class="al al-d">${e.message}</div>`);}
+  }catch(e){
+    showModal('<button class="mo-x" onclick="closeModal();verProveedor(\''+provId+'\')">✕</button><div class="al al-d">'+e.message+'</div>');
+  }
+}
+
+function masivoMarcarTodos(check){
+  document.querySelectorAll(".masivo-cb").forEach(cb=>cb.checked=check);
+}
+
+function masivoCantTotal(){
+  // Reset all qty to full pending
+  document.querySelectorAll(".masivo-cant").forEach(inp=>{
+    inp.value=inp.max;
+  });
+}
+
+async function confirmarIngresoMasivo(provId){
+  const checks=document.querySelectorAll(".masivo-cb:checked");
+  if(!checks.length){toast("Marcá al menos una OC");return;}
+  const ref=document.getElementById("masivo-ref")?.value||"";
+
+  const aIngresar=[];
+  checks.forEach(cb=>{
+    const ocId=cb.dataset.ocId;
+    const pend=parseFloat(cb.dataset.pend)||0;
+    const cantInp=document.querySelector('.masivo-cant[data-oc-id="'+ocId+'"]');
+    const cant=parseFloat(cantInp?.value)||0;
+    if(cant>0&&cant<=pend){
+      aIngresar.push({ocId,cant,pend});
+    }
+  });
+
+  if(!aIngresar.length){toast("Ingresá cantidades válidas");return;}
+
+  if(!confirm("Procesar ingreso de "+aIngresar.length+" OC"+(aIngresar.length>1?"s":"")+"?"))return;
+
+  const btn=event.target;
+  if(btn){btn.disabled=true;btn.textContent="Procesando...";}
+
+  let ok=0,fail=0;
+  const errores=[];
+  for(const item of aIngresar){
+    try{
+      await api("ingresarOCCompleta",{
+        oc_id:item.ocId,
+        cantidad:item.cant,
+        referencia:ref||"OC "+item.ocId
+      });
+      ok++;
+    }catch(e){
+      fail++;
+      errores.push(item.ocId+": "+e.message);
+    }
+  }
+
+  closeModal();
+  if(fail===0){
+    toast("✓ "+ok+" OC"+(ok>1?"s":"")+" ingresada"+(ok>1?"s":"")+" al stock");
+  }else{
+    toast("⚠ "+ok+" exitosas, "+fail+" con error");
+    console.warn("Errores ingreso masivo:",errores);
+  }
+  setTimeout(()=>verProveedor(provId),200);
 }
 function modalCompraDesdeProveedor(provId,provNombre){
   const items=S.inv.map(i=>`<option value="${i.item_id}">${i.descripcion} (${i.item_id})</option>`).join("");
