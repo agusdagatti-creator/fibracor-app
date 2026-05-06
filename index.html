@@ -964,7 +964,9 @@ async function repararTecIdMovsSilent(btn){
   if(btn){btn.disabled=true;btn.textContent="Reparando...";}
   try{
     const res=await api("repararTecnicoIdMovimientos");
-    toast("✓ Revisados: "+res.checked+" · Corregidos: "+res.fixed);
+    const msg="✓ Revisados: "+res.checked+" · Corregidos: "+res.fixed
+      +(res.noMatch>0?" · Sin match: "+res.noMatch+" (asignalos manualmente desde Stock → 🔧 Asignar a técnico)":"");
+    toast(msg);
     closeModal();
     setTimeout(()=>loadMT(),800);
   }catch(e){
