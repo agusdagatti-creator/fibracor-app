@@ -273,6 +273,7 @@ tr:last-child td{border-bottom:none;}tr:hover td{background:rgba(255,255,255,.02
 <div id="toast"></div>
 <div class="mbg hidden" id="mbg"><div class="mo" id="mc"></div></div>
 <script>
+// FIBRACOR v5.7 - 241353 bytes
 const API="https://script.google.com/macros/s/AKfycbysdLOdxeufCTCSzHotogb0lI5ooud8MvtbTiYxovpgq2l99HtJCi4lff5yHftyGbES/exec";
 const S={token:null,user:null,obras:[],inv:[],compras:[],clientes:[],proveedores:[],remitos:[],_costos:[]};
 
@@ -2727,11 +2728,13 @@ async function loadMT(){
     // TÉCNICO — Mis obras + herramientas
     // ══════════════════════════════════
     if(esTecnico){
+      // Resilient parallel load - if any fails, others still work
       const [dO,dR,dHerr]=await Promise.all([
-        api("getObras"),
-        api("getReportesTecnico",{tecnico_id:u.user_id}),
-        api("getHerramientasAsignadas",{tecnico_id:u.user_id,tecnico_nombre:u.nombre||""})
+        api("getObras").catch(e=>{console.warn("getObras error:",e);return{obras:[]};}),
+        api("getReportesTecnico",{tecnico_id:u.user_id}).catch(e=>{console.warn("getReportes error:",e);return{reportes:[]};}),
+        api("getHerramientasAsignadas",{tecnico_id:u.user_id,tecnico_nombre:u.nombre||""}).catch(e=>{console.warn("getHerramientas error:",e);return{herramientas:[],_error:e.message};})
       ]);
+      if(dHerr._error){console.error("⚠ getHerramientasAsignadas falló:",dHerr._error);}
       const idUser=u.user_id||"";
       const normN=str=>String(str||"").toLowerCase().replace(/[^a-z0-9 ]/g,"").replace(/\s+/g," ").trim();
       const vistas=new Set();
@@ -2800,8 +2803,12 @@ async function loadMT(){
         });
         window._mtHerramientas=herrasig;
       } else {
-        h+=`<div class="xs mu" style="padding:8px">No tenés herramientas asignadas en este momento.</div>
-        <div class="xs mu" style="padding:8px;opacity:.7">💡 Si Pañol te entregó herramientas y no aparecen acá, puede ser que los movimientos antiguos no tengan tu ID de técnico asignado. Comunicá esto a tu supervisor.</div>`;
+        if(dHerr._error){
+          h+=`<div class="al al-w" style="margin:8px">⚠ El endpoint <code>getHerramientasAsignadas</code> no responde. Esto significa que el Apps Script no fue redeployado con la última versión. Avisar a Dirección.</div>`;
+        } else {
+          h+=`<div class="xs mu" style="padding:8px">No tenés herramientas asignadas en este momento.</div>
+          <div class="xs mu" style="padding:8px;opacity:.7">💡 Si Pañol te entregó herramientas y no aparecen acá, puede ser que los movimientos antiguos no tengan tu ID de técnico asignado. Comunicá esto a tu supervisor.</div>`;
+        }
       }
       h+=`</div>`;
 
