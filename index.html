@@ -2445,54 +2445,70 @@ async function loadSolicitudes(filtro){
   const dEl=document.getElementById("d-solic");
   if(!dEl)return;
   dEl.innerHTML=ldr();
+  // Store sols in closure for event handler
+  var solsData=[];
   try{
     const d=await api("getSolicitudes",{filtro:filtro||""});
-    const sols=d.solicitudes||[];
+    solsData=d.solicitudes||[];
 
-    if(!sols.length){
-      const msg=filtro==="atendido"?"Sin solicitudes atendidas.":filtro==="todas"?"Sin solicitudes registradas.":"Sin solicitudes pendientes. ✓";
-      dEl.innerHTML=`<div class="al al-i">${msg}</div>`;
+    if(!solsData.length){
+      const msgs={atendido:"Sin solicitudes atendidas.",todas:"Sin solicitudes registradas."};
+      dEl.innerHTML='<div class="al al-i">'+(msgs[filtro]||"Sin solicitudes pendientes. ✓")+"</div>";
       return;
     }
 
-    const urgColor=p=>p==="Urgente"?"var(--ar)":p==="Alta"?"var(--ay)":"var(--border)";
-    const urgBadge=p=>p==="Urgente"?`<span class="badge b-red">⚠ URGENTE</span>`:p==="Alta"?`<span class="badge b-amber">Alta</span>`:`<span class="badge b-gray">Normal</span>`;
+    // Build HTML without nested template literals
+    const rows=solsData.map(function(sol,i){
+      const urgColor=sol.prioridad==="Urgente"?"var(--ar)":sol.prioridad==="Alta"?"var(--ay)":"var(--border)";
+      const urgBadge=sol.prioridad==="Urgente"
+        ?'<span class="badge b-red">⚠ URGENTE</span>'
+        :sol.prioridad==="Alta"
+          ?'<span class="badge b-amber">Alta</span>'
+          :'<span class="badge b-gray">Normal</span>';
 
-    dEl.innerHTML=sols.map((sol,i)=>`
-      <div style="border:1px solid ${urgColor(sol.prioridad)};border-radius:10px;padding:14px;margin-bottom:12px" data-sol="${i}">
-        <div class="flex between mb8">
-          <div>
-            <span class="bold">&#128119; ${sol.tecnico_nombre||"Técnico"}</span>
-            <span class="badge b-blue" style="margin-left:8px">&#127959; ${sol.obra_id||""}</span>
-          </div>
-          <div class="flex gap8 items-center">
-            ${urgBadge(sol.prioridad)}
-            <span class="xs mu">${sol.fecha||""}</span>
-          </div>
-        </div>
+      // Format items - replace pipe separator with line break
+      const itemsHtml=(sol.item_solicitado||"").split("|").map(function(line){
+        return '<div class="sm" style="padding:2px 0">'+line.replace(/^\d+\.\s*/,"").trim()+"</div>";
+      }).join("");
 
-        <div class="card mb8" style="padding:10px">
-          <div class="xs mu bold mb6">&#128230; Materiales solicitados:</div>
-          <div class="sm" style="white-space:pre-wrap;line-height:1.6">${(sol.item_solicitado||"").replace(/\|/g,"
-")}</div>
-          ${sol.descripcion&&sol.descripcion!==sol.item_solicitado?`<div class="xs mu mt6">&#128221; Motivo: ${sol.descripcion}</div>`:""}
-        </div>
+      const motivoHtml=sol.descripcion&&sol.descripcion!==sol.item_solicitado
+        ?'<div class="xs mu mt6">📝 '+sol.descripcion+"</div>"
+        :"";
 
-        ${sol.estado_solicitud==="Atendido"
-          ?`<div class="badge b-green">&#10003; Atendida el ${sol.fecha_atencion||""}</div>`
-          :`<div class="flex gap8 wrap">
-            <button class="btn btn-g btn-sm" data-accion="entregar" data-idx="${i}">&#10003; Entregar del stock</button>
-            <button class="btn btn-p btn-sm" data-accion="generar-oc" data-idx="${i}">&#128722; Generar OC</button>
-            <button class="btn btn-gh btn-sm" data-accion="parcial" data-idx="${i}">&#9881; Atenci&oacute;n parcial</button>
-          </div>`
-        }
-      </div>`).join("");
+      const accionesHtml=sol.estado_solicitud==="Atendido"
+        ?'<div class="badge b-green">✓ Atendida '+(sol.fecha_atencion||"")+"</div>"
+        :'<div class="flex gap8 wrap">'
+          +'<button class="btn btn-g btn-sm" data-accion="entregar" data-idx="'+i+'">✓ Entregar del stock</button>'
+          +'<button class="btn btn-p btn-sm" data-accion="generar-oc" data-idx="'+i+'">🛒 Generar OC</button>'
+          +'<button class="btn btn-gh btn-sm" data-accion="parcial" data-idx="'+i+'">⚙ Atención parcial</button>'
+          +'</div>';
 
-    // Event delegation
-    dEl.onclick=e=>{
+      return '<div style="border:1px solid '+urgColor+';border-radius:10px;padding:14px;margin-bottom:12px">'
+        +'<div class="flex between mb8">'
+          +'<div>'
+            +'<span class="bold">👷 '+(sol.tecnico_nombre||"Técnico")+"</span>"
+            +'<span class="badge b-blue" style="margin-left:8px">🏗 '+(sol.obra_id||"")+"</span>"
+          +"</div>"
+          +'<div class="flex gap8">'
+            +urgBadge
+            +'<span class="xs mu">'+(sol.fecha||"")+"</span>"
+          +"</div>"
+        +"</div>"
+        +'<div class="card mb8" style="padding:10px">'
+          +'<div class="xs mu bold mb6">📦 Materiales solicitados:</div>'
+          +itemsHtml+motivoHtml
+        +"</div>"
+        +accionesHtml
+        +"</div>";
+    });
+
+    dEl.innerHTML=rows.join("");
+
+    // Event delegation - no closure issues because we use solsData
+    dEl.onclick=function(e){
       const btn=e.target.closest("[data-accion]");
       if(!btn)return;
-      const sol=sols[parseInt(btn.dataset.idx)];
+      const sol=solsData[parseInt(btn.dataset.idx)];
       if(!sol)return;
       const accion=btn.dataset.accion;
       if(accion==="entregar")modalAtenderSolicitud(sol,"entregar");
@@ -2501,7 +2517,7 @@ async function loadSolicitudes(filtro){
     };
 
   }catch(e){
-    dEl.innerHTML=`<div class="al al-d">${e.message}<br><button class="btn btn-p btn-sm mt8" onclick="loadSolicitudes()">Reintentar</button></div>`;
+    dEl.innerHTML='<div class="al al-d">'+e.message+'<br><button class="btn btn-p btn-sm mt8" onclick="loadSolicitudes()">Reintentar</button></div>';
   }
 }
 
@@ -2552,10 +2568,10 @@ function modalAtenderSolicitud(sol,modo){
     </button>`);
 }
 
-async function confirmarAtencionSolicitud(repId,modo,itemsStr){
+async function confirmarAtencionSolicitud(repId,modo){
+  const items=window._solItems||[];
   // For OC mode: collect which items need OC and create them
   if(modo==="oc"||modo==="parcial"){
-    const items=typeof itemsStr==="string"?JSON.parse(itemsStr):itemsStr;
     const paraOC=[];
     items.forEach((it,i)=>{
       const sel=document.getElementById("sol-accion-"+i);
