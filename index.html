@@ -2634,10 +2634,15 @@ async function saveAsignarTecnico(tecId){
 async function loadMT(){
   el("d-mt").innerHTML=ldr();
   const u=S.user;
-  const userArea=String(u.area||"").toLowerCase().replace(/[^a-z]/g,"");
-  const esTecnico=["tecnico","t?cnico"].includes(userArea)||(u.puede&&u.puede.ver_solo_su_obra);
-  const esPanol=["paniol","panol"].includes(userArea);
-  const esOperOrDir=["operaciones","direccion","direccin"].includes(userArea);
+  // Normalize area to ascii without special chars
+  const userArea=String(u.area||"").toLowerCase()
+    .replace(/[áàäâ]/g,"a").replace(/[éèëê]/g,"e")
+    .replace(/[íìïî]/g,"i").replace(/[óòöô]/g,"o")
+    .replace(/[úùüû]/g,"u").replace(/ñ/g,"n")
+    .replace(/[^a-z]/g,"");
+  const esTecnico=userArea==="tecnico"||(u.puede&&u.puede.ver_solo_su_obra);
+  const esPanol=userArea==="panol"||userArea==="paniol";
+  const esOperOrDir=userArea==="operaciones"||userArea==="direccion";
 
   try{
     let h="";
