@@ -2629,185 +2629,99 @@ async function saveAsignarTecnico(tecId){
 async function loadMT(){
   el("d-mt").innerHTML=ldr();
   const u=S.user;
-  const userArea=String(u.area||"").toLowerCase();
-  const esTecnico=userArea==="técnico"||userArea==="tecnico"||userArea==="t?cnico"||
-                  (u.puede&&u.puede.ver_solo_su_obra);
-  const esPanol=userArea==="pañol"||userArea==="panol"||userArea==="paniol";
-  const esOperOrDir=["operaciones","dirección","direccion"].includes(userArea);
+  const userArea=String(u.area||"").toLowerCase().replace(/[^a-z]/g,"");
+  const esTecnico=["tecnico","t?cnico"].includes(userArea)||(u.puede&&u.puede.ver_solo_su_obra);
+  const esPanol=["paniol","panol"].includes(userArea);
+  const esOperOrDir=["operaciones","direccion","direccin"].includes(userArea);
 
   try{
     let h="";
 
-    // ── PARA PAÑOL: TAREAS DE GESTIÓN ──
-    if(esPanol||esOperOrDir){
-      // Load solicitudes pendientes
-      const dSol=await api("getSolicitudes",{filtro:""});
-      const solsPendientes=(dSol.solicitudes||[]).filter(s=>s.estado_solicitud!=="Atendido");
-
-      if(solsPendientes.length){
-        h+=`<div class="card mb12">
-          <div class="ct">📦 Solicitudes de material pendientes (${solsPendientes.length})</div>
-          <div class="xs mu mb12">Tareas: revisar stock, generar remitos o OCs</div>`;
-
-        solsPendientes.forEach((sol,i)=>{
-          const urgClass=sol.prioridad==="Urgente"?"b-red":sol.prioridad==="Alta"?"b-amber":"b-blue";
-          const urgLabel=sol.prioridad==="Urgente"?"⚠ URGENTE":sol.prioridad==="Alta"?"Alta":"Normal";
-          // Try to parse items
-          let itemCount=0;
-          try{itemCount=(JSON.parse(sol.items_json||"[]")).length;}catch(e){
-            itemCount=String(sol.item_solicitado||"").split("|").filter(x=>x.trim()).length;
-          }
-          h+=`<div style="border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:8px"
-            data-sol-idx="${i}">
-            <div class="flex between mb8">
-              <div>
-                <span class="bold">👷 ${sol.tecnico_nombre||"Técnico"}</span>
-                <span class="badge b-gray" style="margin-left:6px">🏗 ${sol.obra_id||""}</span>
-              </div>
-              <div class="flex gap8">
-                <span class="badge ${urgClass}">${urgLabel}</span>
-                <span class="xs mu">${sol.fecha||""}</span>
-              </div>
-            </div>
-            <div class="xs mu mb8">📦 ${itemCount} ítem${itemCount!==1?"s":""} solicitado${itemCount!==1?"s":""}</div>
-            ${sol.descripcion?`<div class="xs mu mb8">📝 ${sol.descripcion}</div>`:""}
-            <button class="btn btn-p btn-sm" data-mt-accion="procesar-sol" data-sol-id="${sol.reporte_id}">
-              📋 Abrir y procesar solicitud
-            </button>
-          </div>`;
-        });
-        h+=`</div>`;
-
-        // Store for click handler
-        window._mtSols=solsPendientes;
-      } else {
-        h+=`<div class="al al-i mb12">✓ No hay solicitudes pendientes en este momento.</div>`;
-      }
-
-      // Solicitudes parcialmente atendidas (esperando mercadería de OC)
-      const solsParciales=(dSol.solicitudes||[]).filter(s=>String(s.estado_solicitud||"").toLowerCase()==="parcial");
-      if(solsParciales.length){
-        h+=`<div class="card mb12">
-          <div class="ct">⏳ Esperando mercadería (${solsParciales.length})</div>
-          <div class="xs mu mb12">Solicitudes con OCs en proceso — falta entregar al técnico cuando lleguen los materiales</div>`;
-        solsParciales.forEach(sol=>{
-          h+=`<div style="border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:8px;opacity:.85">
-            <div class="flex between mb8">
-              <div>
-                <span class="bold">👷 ${sol.tecnico_nombre||""}</span>
-                <span class="badge b-gray" style="margin-left:6px">🏗 ${sol.obra_id||""}</span>
-              </div>
-              <span class="badge b-amber">Parcial</span>
-            </div>
-            <div class="xs mu">⏳ Aguardando que llegue la mercadería de OC</div>
-          </div>`;
-        });
-        h+=`</div>`;
-      }
-
-      // OCs aprobadas con mercadería para ingresar (para Pañol)
-      if(esPanol){
-        try{
-          const dOC=await api("getCompras");
-          const ocsListasIngresar=(dOC.compras||[]).filter(c=>c.estado==="Aprobado");
-          if(ocsListasIngresar.length){
-            h+=`<div class="card mb12">
-              <div class="ct">📥 OCs aprobadas — pendiente ingresar (${ocsListasIngresar.length})</div>
-              <div class="xs mu mb12">Cuando llegue la mercadería, registrar el ingreso al stock</div>`;
-            ocsListasIngresar.slice(0,10).forEach(oc=>{
-              h+=`<div style="border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:8px">
-                <div class="flex between mb8">
-                  <div><span class="bold">${oc.compra_id}</span>
-                  <span class="xs mu" style="margin-left:6px">${oc.descripcion||oc.item_id||""}</span></div>
-                  <span class="badge b-green">Aprobada</span>
-                </div>
-                <div class="xs mu mb8">📦 ${oc.cantidad_faltante||1} ${oc.unidad||"ud."} ${oc.proveedor?"· 🏭 "+oc.proveedor:""}</div>
-                <button class="btn btn-g btn-sm" data-mt-accion="ingresar-oc" data-oc-id="${oc.compra_id}">
-                  📥 Ingresar mercadería
-                </button>
-              </div>`;
-            });
-            h+=`</div>`;
-          }
-        }catch(e){console.warn("getCompras error",e);}
-      }
-    }
-
-    // ── PARA TÉCNICO: SUS OBRAS ──
+    // ══════════════════════════════════
+    // TÉCNICO — Mis obras + herramientas
+    // ══════════════════════════════════
     if(esTecnico){
-      const [dO,dR]=await Promise.all([
+      const [dO,dR,dHerr]=await Promise.all([
         api("getObras"),
-        api("getReportesTecnico",{tecnico_id:S.user.user_id})
+        api("getReportesTecnico",{tecnico_id:u.user_id}),
+        api("getHerramientasAsignadas",{tecnico_id:u.user_id})
       ]);
-      const todasObras=dO.obras||[];
-      const idUser=S.user.user_id||"";
-      const nombreUser=S.user.nombre||"";
+      const idUser=u.user_id||"";
       const normN=str=>String(str||"").toLowerCase().replace(/[^a-z0-9 ]/g,"").replace(/\s+/g," ").trim();
-
       const vistas=new Set();
-      const misObras=todasObras.filter(o=>{
+      const misObras=(dO.obras||[]).filter(o=>{
         if(vistas.has(o.obra_id))return false;
-        let match=false;
-        if(o.jefe_obra===idUser)match=true;
-        if(!match&&nombreUser&&normN(o.jefe_obra)===normN(nombreUser))match=true;
+        let match=o.jefe_obra===idUser;
         if(!match&&o.tecnicos_asignados){
-          const asig=String(o.tecnicos_asignados);
-          if(asig.indexOf(idUser)>=0)match=true;
-          if(!match){
-            try{
-              const arr=JSON.parse(asig);
-              if(arr.some(v=>String(v)===idUser||(nombreUser&&normN(String(v))===normN(nombreUser))))match=true;
-            }catch(e){}
-          }
+          const a=String(o.tecnicos_asignados);
+          if(a.indexOf(idUser)>=0)match=true;
+          if(!match){try{match=JSON.parse(a).some(v=>String(v)===idUser);}catch(e){}}
         }
-        if(match)vistas.add(o.obra_id);
-        return match;
+        if(match)vistas.add(o.obra_id);return match;
       });
-
       const misRep=dR.reportes||[];
+      const herrasig=dHerr.herramientas||[];
       const estadosTerminados=["Cerrada","Para cierre","Eliminada"];
       const obrasActivas=misObras.filter(o=>!estadosTerminados.includes(o.estado));
       const obrasTerminadas=misObras.filter(o=>estadosTerminados.includes(o.estado));
 
+      // Obras activas
       if(obrasActivas.length){
         h+=`<div class="card mb12"><div class="ct">🏗 Mis obras activas (${obrasActivas.length})</div>`;
         obrasActivas.forEach((o,i)=>{
           const ec={"En ejecución":"b-green","Pendiente OIO":"b-amber","Planificación":"b-blue"};
-          const repsObra=misRep.filter(r=>r.obra_id===o.obra_id);
+          const reps=misRep.filter(r=>r.obra_id===o.obra_id);
           h+=`<div style="border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:10px"
-            data-mt-obra="${i}"
-            data-obra-id="${o.obra_id}"
-            data-cliente="${(o.cliente||"").replace(/"/g,"&quot;")}"
-            data-estado="${o.estado||""}">
+            data-mt-obra="${i}" data-obra-id="${o.obra_id}"
+            data-cliente="${(o.cliente||"").replace(/"/g,"&quot;")}" data-estado="${o.estado||""}">
             <div class="flex between mb8">
               <div><span class="bold">${o.obra_id}</span> <span class="mu">— ${o.cliente}</span></div>
               <span class="badge ${ec[o.estado]||"b-gray"}">${o.estado}</span>
             </div>
             <div class="xs mu mb8">${o.nombre_obra||""} · Etapa ${o.etapa_actual||0}/8</div>
-            ${repsObra.length?`<div class="xs mu mb8">📋 ${repsObra.length} reporte${repsObra.length>1?"s":""} cargado${repsObra.length>1?"s":""}</div>`:""}
+            ${reps.length?`<div class="xs mu mb8">📋 ${reps.length} reporte${reps.length>1?"s":""}</div>`:""}
             <div class="flex gap8 wrap">
               <button class="btn btn-p btn-xs" data-accion="reporte">📝 Reporte</button>
-              <button class="btn btn-gh btn-xs" data-accion="ver-reportes">📋 Ver historial</button>
-              <button class="btn btn-warn btn-xs" data-accion="solicitar">📦 Solicitar material</button>
+              <button class="btn btn-gh btn-xs" data-accion="ver-reportes">📋 Historial</button>
+              <button class="btn btn-warn btn-xs" data-accion="solicitar">📦 Solicitar</button>
               <button class="btn btn-gh btn-xs" data-accion="estado-tec">🔄 Estado</button>
             </div>
           </div>`;
         });
         h+=`</div>`;
-      } else if(!h){
-        h+=`<div class="al al-i">No tenés obras activas asignadas actualmente.</div>`;
+      }else{h+=`<div class="al al-i mb12">No tenés obras activas asignadas.</div>`;}
+
+      // Herramientas asignadas al técnico
+      if(herrasig.length){
+        h+=`<div class="card mb12" style="border-color:rgba(167,139,250,.3)">
+          <div class="ct">🔧 Herramientas en mi poder (${herrasig.length})</div>
+          <div class="xs mu mb12">Herramientas que tenés asignadas. Cuando las devuelvas, enviá la solicitud de devolución.</div>`;
+        herrasig.forEach((her,i)=>{
+          h+=`<div style="border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:8px">
+            <div class="flex between mb6">
+              <div><span class="sm bold">🔧 ${her.descripcion}</span>
+              <span class="xs mu" style="margin-left:6px">[${her.item_id}]</span></div>
+              <span class="badge b-blue">${her.cant} ud.</span>
+            </div>
+            <div class="xs mu mb8">📍 Obra: ${her.obra_id||"—"}</div>
+            <button class="btn btn-gh btn-sm" data-accion-herr="devolver" data-herr-idx="${i}">
+              📤 Solicitar devolución
+            </button>
+          </div>`;
+        });
+        h+=`</div>`;
+        window._mtHerramientas=herrasig;
       }
 
+      // Obras terminadas
       if(obrasTerminadas.length){
-        h+=`<div class="card mb12">
-          <div class="ct" style="color:var(--text2)">✅ Obras finalizadas (${obrasTerminadas.length})</div>`;
+        h+=`<div class="card mb12"><div class="ct" style="opacity:.7">✅ Obras finalizadas (${obrasTerminadas.length})</div>`;
         obrasTerminadas.forEach(o=>{
-          h+=`<div style="border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:8px;opacity:.7">
+          h+=`<div style="border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:6px;opacity:.7">
             <div class="flex between mb4">
-              <div><span class="bold">${o.obra_id}</span> <span class="mu">— ${o.cliente}</span></div>
+              <div><span class="bold">${o.obra_id}</span><span class="mu" style="margin-left:6px">— ${o.cliente}</span></div>
               <span class="badge b-gray">${o.estado}</span>
             </div>
-            <div class="xs mu mb8">${o.nombre_obra||""}</div>
             <button class="btn btn-gh btn-xs" data-accion-fin="ver-reportes" data-obra-fin="${o.obra_id}" data-cliente="${(o.cliente||"").replace(/"/g,"&quot;")}">📋 Ver historial</button>
           </div>`;
         });
@@ -2816,48 +2730,229 @@ async function loadMT(){
 
       window._mtObrasActivas=obrasActivas;
       window._mtObrasTerminadas=obrasTerminadas;
+
+      // Event handlers
+      el("d-mt").onclick=e=>{
+        const accion=e.target.closest("[data-accion]")?.dataset.accion;
+        if(accion){
+          const row=e.target.closest("[data-mt-obra]");if(!row)return;
+          const obraId=row.dataset.obraId,cliente=row.dataset.cliente,estado=row.dataset.estado;
+          if(accion==="reporte")modalReporteDiario(obraId,cliente);
+          else if(accion==="ver-reportes")verHistorialObra(obraId,cliente);
+          else if(accion==="solicitar")modalSolicitarMaterial(obraId);
+          else if(accion==="estado-tec")modalCambiarEstadoTecnico(obraId,estado||"");
+        }
+        const btnFin=e.target.closest("[data-accion-fin]");
+        if(btnFin)verHistorialObra(btnFin.dataset.obraFin,btnFin.dataset.cliente);
+        const btnHerr=e.target.closest("[data-accion-herr]");
+        if(btnHerr&&btnHerr.dataset.accionHerr==="devolver"){
+          const herr=window._mtHerramientas[parseInt(btnHerr.dataset.herrIdx)];
+          if(herr)modalSolicitarDevolucion(herr);
+        }
+      };
+    }
+
+    // ══════════════════════════════════════════════
+    // PAÑOL / OPERACIONES — Solicitudes + Devoluciones
+    // ══════════════════════════════════════════════
+    if(esPanol||esOperOrDir){
+      const [dSol,dDev]=await Promise.all([
+        api("getSolicitudes",{filtro:""}),
+        api("getDevolucionesPendientes")
+      ]);
+      const solsPend=(dSol.solicitudes||[]).filter(s=>s.estado_solicitud!=="Atendido");
+
+      // Group by obra
+      const byObra={};
+      solsPend.forEach(sol=>{
+        const obra=sol.obra_id||"sin-obra";
+        if(!byObra[obra])byObra[obra]={obra:sol.obra_id||"",solicitudes:[],cliente:""};
+        byObra[obra].solicitudes.push(sol);
+        if(!byObra[obra].cliente){
+          const o=(S.obras||[]).find(x=>x.obra_id===sol.obra_id);
+          if(o)byObra[obra].cliente=o.cliente||"";
+        }
+      });
+
+      const nObras=Object.keys(byObra).length;
+      const nSols=solsPend.length;
+
+      if(nSols){
+        h+=`<div class="card mb12">
+          <div class="ct" style="display:flex;justify-content:space-between;align-items:center">
+            <span>📦 Solicitudes pendientes (${nSols} en ${nObras} obra${nObras!==1?"s":""})</span>
+            <button class="btn btn-p btn-xs" onclick="goMod('solicitudes')">Ver módulo completo</button>
+          </div>`;
+        Object.entries(byObra).forEach(([obraId,g])=>{
+          const pend=g.solicitudes.length;
+          const tieneUrg=g.solicitudes.some(s=>s.prioridad==="Urgente");
+          const totalItems=g.solicitudes.reduce((sum,s)=>sum+(s.total_items||0),0);
+          h+=`<div style="border:1px solid ${tieneUrg?"var(--ar)":"var(--border)"};border-radius:8px;padding:12px;margin-bottom:8px">
+            <div class="flex between mb8">
+              <div>
+                <span class="bold">🏗 ${g.obra}</span>
+                ${g.cliente?`<span class="xs mu" style="margin-left:6px">— ${g.cliente}</span>`:""}
+              </div>
+              <div class="flex gap8">
+                ${tieneUrg?`<span class="badge b-red">⚠ Urgente</span>`:""}
+                <span class="badge b-blue">${pend} pedido${pend!==1?"s":""} · ${totalItems} ítem${totalItems!==1?"s":""}</span>
+              </div>
+            </div>
+            <button class="btn btn-p btn-sm" onclick="abrirGestionObra(window._solGruposCache['${obraId}'])">⚡ Procesar pedidos de esta obra</button>
+          </div>`;
+        });
+        window._solGruposCache=byObra;
+        h+=`</div>`;
+      }else{
+        h+=`<div class="al al-i mb12">✓ No hay solicitudes pendientes en este momento.</div>`;
+      }
+
+      // Devoluciones pendientes
+      const devPend=(dDev.devoluciones||[]);
+      if(devPend.length){
+        h+=`<div class="card mb12" style="border-color:rgba(167,139,250,.3)">
+          <div class="ct">📤 Devoluciones de herramientas pendientes (${devPend.length})</div>`;
+        devPend.forEach((dev,i)=>{
+          h+=`<div style="border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:8px">
+            <div class="flex between mb6">
+              <div><span class="bold">🔧 ${dev.item_id}</span>
+              <span class="xs mu" style="margin-left:6px">· ${dev.cantidad} ud.</span></div>
+              <span class="xs mu">${dev.fecha||""}</span>
+            </div>
+            <div class="xs mu mb8">👷 ${dev.tecnico||dev.nombre_tecnico||""} · 🏗 ${dev.obra_id||""}</div>
+            ${dev.observaciones?`<div class="xs mu mb8">📝 ${dev.observaciones}</div>`:""}
+            <button class="btn btn-g btn-sm" data-dev-accion="aceptar" data-dev-idx="${i}">✓ Aceptar devolución</button>
+          </div>`;
+        });
+        window._mtDevoluciones=devPend;
+        h+=`</div>`;
+      }
+
+      // OCs aprobadas pendientes de ingreso (solo Pañol)
+      if(esPanol){
+        try{
+          const dOCP=await api("getOCsPendientesIngreso");
+          const ocsPend=(dOCP.compras||[]);
+          if(ocsPend.length){
+            h+=`<div class="card mb12">
+              <div class="ct">📥 OCs aprobadas — pendiente ingresar (${ocsPend.length})</div>`;
+            ocsPend.slice(0,8).forEach(oc=>{
+              h+=`<div style="border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:6px">
+                <div class="flex between mb4">
+                  <span class="bold">${oc.compra_id}</span>
+                  <span class="badge b-green">Aprobada</span>
+                </div>
+                <div class="xs mu mb6">${oc.descripcion||oc.item_id||""} · ⏳ ${oc.cantidad_pendiente} ${oc.unidad||"ud."} pendiente${oc.proveedor?` · 🏭 ${oc.proveedor}`:""}</div>
+                <button class="btn btn-g btn-sm" onclick="modalIngreso('${oc.compra_id}')">📥 Ingresar</button>
+              </div>`;
+            });
+            h+=`</div>`;
+          }
+        }catch(e){}
+      }
+
+      // Event handler for devoluciones
+      el("d-mt").onclick=e=>{
+        const btn=e.target.closest("[data-dev-accion]");
+        if(btn&&btn.dataset.devAccion==="aceptar"){
+          const dev=window._mtDevoluciones[parseInt(btn.dataset.devIdx)];
+          if(dev)modalAceptarDevolucion(dev);
+        }
+      };
     }
 
     el("d-mt").innerHTML=h||`<div class="mu" style="text-align:center;padding:40px">Sin actividad pendiente</div>`;
-
-    // Universal click handler
-    el("d-mt").onclick=e=>{
-      // Tareas de Pañol/Operaciones
-      const mtAccion=e.target.closest("[data-mt-accion]")?.dataset.mtAccion;
-      if(mtAccion==="procesar-sol"){
-        const solId=e.target.closest("[data-mt-accion]").dataset.solId;
-        const sol=(window._mtSols||[]).find(x=>x.reporte_id===solId);
-        if(sol)abrirSolicitudDetalle(sol);
-        return;
-      }
-      if(mtAccion==="ingresar-oc"){
-        const ocId=e.target.closest("[data-mt-accion]").dataset.ocId;
-        modalIngresoDesdeOC(ocId);
-        return;
-      }
-      // Acciones obras técnico
-      const accion=e.target.closest("[data-accion]")?.dataset.accion;
-      if(accion){
-        const row=e.target.closest("[data-mt-obra]");if(!row)return;
-        const obraId=row.dataset.obraId;
-        const cliente=row.dataset.cliente;
-        const estado=row.dataset.estado;
-        if(!obraId)return;
-        if(accion==="reporte")modalReporteDiario(obraId,cliente);
-        else if(accion==="ver-reportes")verHistorialObra(obraId,cliente);
-        else if(accion==="solicitar")modalSolicitarMaterial(obraId);
-        else if(accion==="estado-tec")modalCambiarEstadoTecnico(obraId,estado||"");
-      }
-      const btnFin=e.target.closest("[data-accion-fin]");
-      if(btnFin){
-        verHistorialObra(btnFin.dataset.obraFin,btnFin.dataset.cliente);
-      }
-    };
 
   }catch(e){
     el("d-mt").innerHTML=`<div class="al al-d">${e.message}<br><button class="btn btn-p btn-sm mt8" onclick="loadMT()">Reintentar</button></div>`;
   }
 }
+
+function modalSolicitarDevolucion(herr){
+  showModal(`<button class="mo-x" onclick="closeModal()">✕</button>
+    <div class="mo-t">📤 Solicitar devolución</div>
+    <div class="al al-i mb12">Notificarás a Pañol/Operaciones que querés devolver esta herramienta.</div>
+    <div class="card mb12" style="padding:12px">
+      <div class="sm bold mb4">🔧 ${herr.descripcion}</div>
+      <div class="xs mu">Código: ${herr.item_id} · Cantidad asignada: ${herr.cant} ud.</div>
+    </div>
+    <div class="fg"><label>CANTIDAD A DEVOLVER</label>
+      <input class="inp" type="number" id="dev-cant" min="0.01" step="0.01" max="${herr.cant}" value="${herr.cant}">
+    </div>
+    <div class="fg"><label>ESTADO DE LA HERRAMIENTA</label>
+      <select class="sel" id="dev-estado">
+        <option value="Bueno">✓ Buena condición</option>
+        <option value="Desgaste normal">⚠ Desgaste normal</option>
+        <option value="Necesita mantenimiento">🔧 Necesita mantenimiento</option>
+        <option value="Dañada">✗ Dañada</option>
+      </select>
+    </div>
+    <div class="fg"><label>OBSERVACIÓN (opcional)</label>
+      <input class="inp" id="dev-obs" placeholder="Detalle del estado, daños, etc...">
+    </div>
+    <button class="btn btn-p btn-bl" onclick="confirmarSolicitarDevolucion('${herr.item_id}','${herr.obra_id||""}')">📤 Enviar solicitud de devolución</button>`);
+}
+
+async function confirmarSolicitarDevolucion(itemId, obraId){
+  const cant=parseFloat(document.getElementById("dev-cant")?.value)||0;
+  if(cant<=0){toast("Ingresá una cantidad válida");return;}
+  const estado=document.getElementById("dev-estado")?.value||"";
+  const obs=document.getElementById("dev-obs")?.value||"";
+  try{
+    await api("solicitarDevolucion",{
+      item_id:itemId,
+      cantidad:cant,
+      obra_id:obraId,
+      estado_herramienta:estado,
+      observaciones:obs
+    });
+    closeModal();
+    toast("✓ Solicitud de devolución enviada");
+    loadMT();
+  }catch(e){toast("Error: "+e.message);}
+}
+
+function modalAceptarDevolucion(dev){
+  const itemDesc=dev.item_id;
+  showModal(`<button class="mo-x" onclick="closeModal()">✕</button>
+    <div class="mo-t">✓ Aceptar devolución</div>
+    <div class="card mb12" style="padding:12px">
+      <div class="sm bold mb4">🔧 ${dev.item_id}</div>
+      <div class="xs mu">Técnico: ${dev.tecnico||dev.nombre_tecnico||""}</div>
+      <div class="xs mu">Cantidad: ${dev.cantidad} ud. · Obra: ${dev.obra_id||"—"}</div>
+      ${dev.estado_herramienta?`<div class="xs mu mt4">Estado declarado: <b>${dev.estado_herramienta}</b></div>`:""}
+      ${dev.observaciones?`<div class="xs mu mt4">📝 ${dev.observaciones}</div>`:""}
+    </div>
+    <div class="fg"><label>ESTADO REAL AL RECIBIRLA</label>
+      <select class="sel" id="acdev-estado">
+        <option value="Bueno">✓ Buena condición — ingresa al stock</option>
+        <option value="Desgaste normal">⚠ Desgaste normal — ingresa al stock</option>
+        <option value="Necesita mantenimiento">🔧 Necesita mantenimiento — ingresa al stock</option>
+        <option value="Dañada">✗ Dañada — ingresa fuera de servicio</option>
+      </select>
+    </div>
+    <div class="fg"><label>OBSERVACIÓN DEL RECEPTOR</label>
+      <input class="inp" id="acdev-obs" placeholder="Cómo la recibiste, qué notaste...">
+    </div>
+    <button class="btn btn-p btn-bl" onclick="confirmarAceptarDevolucion('${dev.mov_id||dev.movimiento_id||""}')">✓ Confirmar recepción y restablecer stock</button>`);
+}
+
+async function confirmarAceptarDevolucion(movId){
+  const estado=document.getElementById("acdev-estado")?.value||"Bueno";
+  const obs=document.getElementById("acdev-obs")?.value||"";
+  try{
+    await api("aceptarDevolucion",{
+      mov_id:movId,
+      estado_recibido:estado,
+      observaciones:obs
+    });
+    closeModal();
+    toast("✓ Devolución aceptada — stock actualizado");
+    loadMT();
+  }catch(e){toast("Error: "+e.message);}
+}
+
+
 
 function modalIngresoDesdeOC(ocId){
   modalIngreso(ocId); // pass preselected OC
