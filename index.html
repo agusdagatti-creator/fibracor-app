@@ -479,6 +479,8 @@ async function loadDash(){
         else if(oc.estado==="Rechazado")h+=`<div class="al al-d mb12">❌ <b>Tu OC ${oc.compra_id} fue rechazada</b>${oc.observaciones?" · Motivo: "+oc.observaciones:""}</div>`;
       });
     }
+    // Solicitudes de material dirigidas a este usuario
+    if(d.solicitudes_dirigidas>0)h+=`<div class="al al-w mb12" style="cursor:pointer" onclick="goMod('tecnicos')">📦 <b>Tenés ${d.solicitudes_dirigidas} solicitud${d.solicitudes_dirigidas>1?"es":""} de material pendiente${d.solicitudes_dirigidas>1?"s":""}</b> — hacé click para ver</div>`;
     // Notificaciones de OCs: dirigidas al usuario específicamente
     if(d.compras?.dirigidas_a_mi>0)h+=`<div class="al al-i mb12" style="border-left-color:#F59E0B;background:rgba(245,158,11,.1);cursor:pointer" onclick="goMod('compras')">🔔 <b>Tenés ${d.compras.dirigidas_a_mi} OC${d.compras.dirigidas_a_mi>1?"s":""} esperando tu aprobación</b> — hacé click para ver</div>`;
     else if(d.compras?.pendientes_aprobacion>0&&u.puede?.aprobar_oc)h+=`<div class="al al-i mb12">🛒 <b>${d.compras.pendientes_aprobacion} OCs pendientes de aprobación</b></div>`;
@@ -2002,6 +2004,15 @@ async function saveReporteDiario(obraId){
 }
 async function modalSolicitarMaterial(obraId){
   if(!S.inv.length){try{const d=await api("getInventario");S.inv=d.items||[];}catch(e){}}
+  // Load Pañol + Operaciones users for destinatario dropdown
+  if(!window._smDestinatarios){
+    try{
+      const d=await api("getUsuarios");
+      window._smDestinatarios=(d.usuarios||[]).filter(u=>
+        ["Pañol","Operaciones","Dirección"].includes(u.area)&&u.activo
+      );
+    }catch(e){window._smDestinatarios=[];}
+  }
   window._smObraId=obraId;
   window._smItems=[]; // lista de items a solicitar
   window._smInv={
@@ -2087,7 +2098,14 @@ async function modalSolicitarMaterial(obraId){
         <option value="Urgente">Urgente — obra parada</option>
       </select>
     </div>
-    <button class="btn btn-p btn-bl" onclick="saveSolicitarMaterial('${obraId}')">📤 Enviar solicitud a pañol</button>`);
+    <div class="fg">
+      <label>🔔 DIRIGIR A</label>
+      <select class="sel" id="sm-destinatario">
+        <option value="">— Todos (Pañol y Operaciones) —</option>
+        ${(window._smDestinatarios||[]).map(u=>`<option value="${u.user_id}">${u.nombre} (${u.area})</option>`).join("")}
+      </select>
+    </div>
+    <button class="btn btn-p btn-bl" onclick="saveSolicitarMaterial('${obraId}')">📤 Enviar solicitud</button>`);
 }
 
 function onTipoSolicitud(){
@@ -2192,13 +2210,19 @@ async function saveSolicitarMaterial(obraId){
     // Send one report per item OR a combined report
     // Combined: list all items in item_solicitado field
     const listaTexto=items.map((it,i)=>`${i+1}. ${it.desc} — ${it.cant} ${it.uni}${it.obs?" ("+it.obs+")":""}`).join(" | ");
+    const destinatario=document.getElementById("sm-destinatario")?.value||"";
+    const destinatarioNombre=destinatario
+      ?(window._smDestinatarios||[]).find(u=>u.user_id===destinatario)?.nombre||""
+      :"Pañol y Operaciones";
     const body={
       obra_id:obraId,
       tipo:"solicitud",
       item_solicitado:listaTexto,
       descripcion:motivo||"Solicitud de materiales/herramientas",
-      cantidad_solicitada:items.length, // total items
+      cantidad_solicitada:items.length,
       prioridad:urg,
+      destinatario_id:destinatario,
+      destinatario_nombre:destinatarioNombre,
       items_json:JSON.stringify(items)
     };
     await api("subirReporte",body);
