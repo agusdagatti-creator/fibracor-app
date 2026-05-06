@@ -2649,7 +2649,7 @@ async function loadMT(){
       const [dO,dR,dHerr]=await Promise.all([
         api("getObras"),
         api("getReportesTecnico",{tecnico_id:u.user_id}),
-        api("getHerramientasAsignadas",{tecnico_id:u.user_id})
+        api("getHerramientasAsignadas",{tecnico_id:u.user_id,tecnico_nombre:u.nombre||""})
       ]);
       const idUser=u.user_id||"";
       const normN=str=>String(str||"").toLowerCase().replace(/[^a-z0-9 ]/g,"").replace(/\s+/g," ").trim();
