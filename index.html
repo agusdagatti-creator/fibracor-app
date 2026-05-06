@@ -250,6 +250,15 @@ tr:last-child td{border-bottom:none;}tr:hover td{background:rgba(255,255,255,.02
         <div class="flex between mb12"><span class="sm mu" id="usuarios-count"></span><button class="btn btn-p btn-sm" onclick="modalCrearUsuario()">+ Nuevo usuario</button></div>
         <div id="d-usu"><div class="loader"><div class="spin"></div></div></div>
       </div>
+      <div class="mod" id="mod-solicitudes">
+        <div class="ph"><h2>&#128236; Solicitudes de material</h2><p>Pedidos de t&eacute;cnicos &mdash; verificar stock y generar OC</p></div>
+        <div class="chips" id="sol-chips">
+          <button class="chip active" data-filter="">Pendientes</button>
+          <button class="chip" data-filter="atendido">Atendidas</button>
+          <button class="chip" data-filter="todas">Todas</button>
+        </div>
+        <div id="d-solic"><div class="loader"><div class="spin"></div></div></div>
+      </div>
       <div class="mod" id="mod-trazabilidad">
         <div class="ph"><h2>&#128220; Trazabilidad</h2><p>Log completo de eventos</p></div>
         <div class="sw"><span class="sicon">&#128269;</span><input class="inp" id="traza-search" placeholder="Buscar evento..."></div>
@@ -342,8 +351,8 @@ function doLogout(){
 el("lpass").addEventListener("keydown",e=>{if(e.key==="Enter")doLogin();});
 
 /* ── APP INIT ───────────────────────────────────── */
-const MM={dashboard:{icon:"🏠",label:"Dashboard",sec:"Principal"},crm:{icon:"👥",label:"CRM",sec:"Comercial"},obras:{icon:"🏗",label:"Obras",sec:"Proyectos"},remitos:{icon:"📄",label:"Remitos",sec:"Proyectos"},costos:{icon:"💰",label:"Costos",sec:"Proyectos"},inventario:{icon:"📦",label:"Stock",sec:"Operaciones"},movimientos:{icon:"🔄",label:"Movimientos",sec:"Operaciones"},compras:{icon:"🛒",label:"Compras",sec:"Operaciones"},tecnicos:{icon:"👷",label:"Técnicos",sec:"Operaciones"},mis_tareas:{icon:"📋",label:"Mis tareas",sec:"Principal"},usuarios:{icon:"👤",label:"Usuarios",sec:"Sistema"},trazabilidad:{icon:"📜",label:"Trazabilidad",sec:"Sistema"}};
-const ORDEN=["dashboard","crm","obras","remitos","costos","inventario","movimientos","compras","tecnicos","mis_tareas","usuarios","trazabilidad"];
+const MM={dashboard:{icon:"🏠",label:"Dashboard",sec:"Principal"},crm:{icon:"👥",label:"CRM",sec:"Comercial"},obras:{icon:"🏗",label:"Obras",sec:"Proyectos"},remitos:{icon:"📄",label:"Remitos",sec:"Proyectos"},costos:{icon:"💰",label:"Costos",sec:"Proyectos"},inventario:{icon:"📦",label:"Stock",sec:"Operaciones"},movimientos:{icon:"🔄",label:"Movimientos",sec:"Operaciones"},compras:{icon:"🛒",label:"Compras",sec:"Operaciones"},tecnicos:{icon:"👷",label:"Técnicos",sec:"Operaciones"},solicitudes:{icon:"📬",label:"Solicitudes",sec:"Operaciones"},mis_tareas:{icon:"📋",label:"Mis tareas",sec:"Principal"},usuarios:{icon:"👤",label:"Usuarios",sec:"Sistema"},trazabilidad:{icon:"📜",label:"Trazabilidad",sec:"Sistema"}};
+const ORDEN=["dashboard","crm","obras","remitos","costos","inventario","movimientos","compras","tecnicos","solicitudes","mis_tareas","usuarios","trazabilidad"];
 
 function startApp(){
   const u=S.user;
@@ -380,7 +389,7 @@ function goMod(mod){
   document.querySelectorAll(".nt,.nt-m").forEach(t=>t.classList.remove("active"));
   el("mod-"+mod)?.classList.add("active");
   document.querySelectorAll(`[data-mod="${mod}"]`).forEach(t=>t.classList.add("active"));
-  ({dashboard:loadDash,obras:loadObras,inventario:loadInv,movimientos:loadMovs,compras:loadCompras,costos:loadCostasSelect,tecnicos:loadTec,mis_tareas:loadMT,usuarios:loadUsuarios,trazabilidad:loadTraza,crm:loadCRM,remitos:loadRemitos})[mod]?.();
+  ({dashboard:loadDash,obras:loadObras,inventario:loadInv,movimientos:loadMovs,compras:loadCompras,costos:loadCostasSelect,tecnicos:loadTec,solicitudes:loadSolicitudes,mis_tareas:loadMT,usuarios:loadUsuarios,trazabilidad:loadTraza,crm:loadCRM,remitos:loadRemitos})[mod]?.();
 }
 
 /* ── EVENT DELEGATION ── Sin onclick con parámetros ─ */
@@ -453,6 +462,14 @@ function setupEvents(){
     try{const d=await api("getTrazabilidad",e.target.value?{q:e.target.value}:{});renderTrazaI(d.eventos||[]);}catch(e){}
   }));
   el("csel").addEventListener("change",e=>loadCostos(e.target.value));
+
+  // Chips - solicitudes
+  document.getElementById("sol-chips")?.addEventListener("click",e=>{
+    const chip=e.target.closest(".chip");if(!chip)return;
+    document.querySelectorAll("#sol-chips .chip").forEach(c=>c.classList.remove("active"));
+    chip.classList.add("active");
+    loadSolicitudes(chip.dataset.filter||"");
+  });
 }
 
 /* ── DASHBOARD ──────────────────────────────────── */
@@ -2373,10 +2390,10 @@ function modalEditUser(id,nombre,email,area,rol){
   // Defaults por área si no hay custom
   const DEFAULT_MODS={
     "Dirección":["dashboard","crm","obras","inventario","movimientos","compras","costos","tecnicos","remitos","usuarios","trazabilidad"],
-    "Operaciones":["dashboard","obras","inventario","movimientos","compras","costos","tecnicos","remitos","trazabilidad"],
+    "Operaciones":["dashboard","obras","inventario","movimientos","compras","costos","tecnicos","solicitudes","remitos","trazabilidad"],
     "Comercial":["dashboard","crm","obras","inventario","compras","costos","remitos","trazabilidad"],
     "Técnico":["dashboard","mis_tareas","inventario","movimientos"],
-    "Pañol":["dashboard","inventario","movimientos","compras"],
+    "Pañol":["dashboard","inventario","movimientos","compras","solicitudes"],
     "Contabilidad":["dashboard","costos","inventario","compras","remitos","trazabilidad","crm"]
   };
   const activeMods=savedMods.length?savedMods:(DEFAULT_MODS[area]||["dashboard"]);
@@ -2394,7 +2411,7 @@ function modalEditUser(id,nombre,email,area,rol){
     <div class="card mt8"><div class="ct">🔐 Permisos</div>${permsHtml}</div>
     <button class="btn btn-p btn-bl mt8" onclick="saveEditUser('${id}')">Guardar</button>`);
 }
-const DEFAULT_MODS_MAP={"Dirección":["dashboard","crm","obras","inventario","movimientos","compras","costos","tecnicos","remitos","usuarios","trazabilidad"],"Operaciones":["dashboard","obras","inventario","movimientos","compras","costos","tecnicos","remitos","trazabilidad"],"Comercial":["dashboard","crm","obras","inventario","compras","costos","remitos","trazabilidad"],"Técnico":["dashboard","mis_tareas","inventario","movimientos"],"Pañol":["dashboard","inventario","movimientos","compras"],"Contabilidad":["dashboard","costos","inventario","compras","remitos","trazabilidad","crm"]};
+const DEFAULT_MODS_MAP={"Dirección":["dashboard","crm","obras","inventario","movimientos","compras","costos","tecnicos","remitos","usuarios","trazabilidad"],"Operaciones":["dashboard","obras","inventario","movimientos","compras","costos","tecnicos","solicitudes","remitos","trazabilidad"],"Comercial":["dashboard","crm","obras","inventario","compras","costos","remitos","trazabilidad"],"Técnico":["dashboard","mis_tareas","inventario","movimientos"],"Pañol":["dashboard","inventario","movimientos","compras","solicitudes"],"Contabilidad":["dashboard","costos","inventario","compras","remitos","trazabilidad","crm"]};
 function aplicarDefaults(area){
   const mods=DEFAULT_MODS_MAP[area]||["dashboard"];
   ["dashboard","crm","obras","remitos","costos","inventario","movimientos","compras","tecnicos","mis_tareas","usuarios","trazabilidad"].forEach(k=>{
@@ -2424,6 +2441,170 @@ async function toggleUser(id){
 }
 
 /* ── TRAZABILIDAD ───────────────────────────────── */
+async function loadSolicitudes(filtro){
+  const dEl=document.getElementById("d-solic");
+  if(!dEl)return;
+  dEl.innerHTML=ldr();
+  try{
+    const d=await api("getSolicitudes",{filtro:filtro||""});
+    const sols=d.solicitudes||[];
+
+    if(!sols.length){
+      const msg=filtro==="atendido"?"Sin solicitudes atendidas.":filtro==="todas"?"Sin solicitudes registradas.":"Sin solicitudes pendientes. ✓";
+      dEl.innerHTML=`<div class="al al-i">${msg}</div>`;
+      return;
+    }
+
+    const urgColor=p=>p==="Urgente"?"var(--ar)":p==="Alta"?"var(--ay)":"var(--border)";
+    const urgBadge=p=>p==="Urgente"?`<span class="badge b-red">⚠ URGENTE</span>`:p==="Alta"?`<span class="badge b-amber">Alta</span>`:`<span class="badge b-gray">Normal</span>`;
+
+    dEl.innerHTML=sols.map((sol,i)=>`
+      <div style="border:1px solid ${urgColor(sol.prioridad)};border-radius:10px;padding:14px;margin-bottom:12px" data-sol="${i}">
+        <div class="flex between mb8">
+          <div>
+            <span class="bold">&#128119; ${sol.tecnico_nombre||"Técnico"}</span>
+            <span class="badge b-blue" style="margin-left:8px">&#127959; ${sol.obra_id||""}</span>
+          </div>
+          <div class="flex gap8 items-center">
+            ${urgBadge(sol.prioridad)}
+            <span class="xs mu">${sol.fecha||""}</span>
+          </div>
+        </div>
+
+        <div class="card mb8" style="padding:10px">
+          <div class="xs mu bold mb6">&#128230; Materiales solicitados:</div>
+          <div class="sm" style="white-space:pre-wrap;line-height:1.6">${(sol.item_solicitado||"").replace(/\|/g,"
+")}</div>
+          ${sol.descripcion&&sol.descripcion!==sol.item_solicitado?`<div class="xs mu mt6">&#128221; Motivo: ${sol.descripcion}</div>`:""}
+        </div>
+
+        ${sol.estado_solicitud==="Atendido"
+          ?`<div class="badge b-green">&#10003; Atendida el ${sol.fecha_atencion||""}</div>`
+          :`<div class="flex gap8 wrap">
+            <button class="btn btn-g btn-sm" data-accion="entregar" data-idx="${i}">&#10003; Entregar del stock</button>
+            <button class="btn btn-p btn-sm" data-accion="generar-oc" data-idx="${i}">&#128722; Generar OC</button>
+            <button class="btn btn-gh btn-sm" data-accion="parcial" data-idx="${i}">&#9881; Atenci&oacute;n parcial</button>
+          </div>`
+        }
+      </div>`).join("");
+
+    // Event delegation
+    dEl.onclick=e=>{
+      const btn=e.target.closest("[data-accion]");
+      if(!btn)return;
+      const sol=sols[parseInt(btn.dataset.idx)];
+      if(!sol)return;
+      const accion=btn.dataset.accion;
+      if(accion==="entregar")modalAtenderSolicitud(sol,"entregar");
+      else if(accion==="generar-oc")modalAtenderSolicitud(sol,"oc");
+      else if(accion==="parcial")modalAtenderSolicitud(sol,"parcial");
+    };
+
+  }catch(e){
+    dEl.innerHTML=`<div class="al al-d">${e.message}<br><button class="btn btn-p btn-sm mt8" onclick="loadSolicitudes()">Reintentar</button></div>`;
+  }
+}
+
+function modalAtenderSolicitud(sol,modo){
+  const esEntrega=modo==="entregar";
+  const esOC=modo==="oc";
+  const esParcial=modo==="parcial";
+
+  // Parse items from the solicitud
+  const items=[];
+  try{
+    if(sol.items_json)items.push(...JSON.parse(sol.items_json));
+  }catch(e){}
+  // Fallback: parse from item_solicitado text
+  if(!items.length&&sol.item_solicitado){
+    sol.item_solicitado.split("|").forEach((line,i)=>{
+      const t=line.replace(/^\d+\.\s*/,"").trim();
+      if(t)items.push({desc:t,cant:1,uni:"ud."});
+    });
+  }
+
+  const itemsHTML=items.map((it,i)=>`
+    <div style="display:flex;align-items:center;gap:8px;padding:8px;background:var(--card2);border:1px solid var(--border2);border-radius:8px;margin-bottom:6px">
+      <div style="flex:1">
+        <div class="sm bold">${it.desc||it.item_solicitado||""}</div>
+        <div class="xs mu">${it.cant||1} ${it.uni||"ud."}${it.obs?" · "+it.obs:""}</div>
+      </div>
+      ${esParcial||esOC?`<select class="sel" style="width:120px;font-size:11px" id="sol-accion-${i}">
+        ${esOC?"":"<option value='stock'>✓ Del stock</option>"}
+        <option value="oc">🛒 Generar OC</option>
+        <option value="nodisp">✗ No disponible</option>
+      </select>`:""}
+    </div>`).join("");
+
+  const titulo=esEntrega?"✓ Confirmar entrega del stock":esOC?"🛒 Generar OC para esta solicitud":"⚙ Resolver solicitud parcialmente";
+  const btnTxt=esEntrega?"Confirmar entrega":esOC?"Generar OC":"Resolver";
+
+  showModal(`<button class="mo-x" onclick="closeModal()">✕</button>
+    <div class="mo-t">${titulo}</div>
+    <div class="xs mu mb12">&#128119; ${sol.tecnico_nombre||""} · &#127959; ${sol.obra_id||""}</div>
+    ${sol.descripcion?`<div class="al al-i mb12">&#128221; ${sol.descripcion}</div>`:""}
+    <div class="ct">Ítems</div>
+    ${itemsHTML||`<div class="sm mu">${sol.item_solicitado||""}</div>`}
+    ${esParcial||esOC?"<div class='xs mu mt8 mb12'>Elegí cómo resolver cada ítem</div>":""}
+    ${esEntrega?`<div class="fg mt8"><label>OBSERVACIÓN (opcional)</label><input class="inp" id="sol-obs" placeholder="Qué se entregó, dónde..."></div>`:""}
+    <button class="btn btn-p btn-bl mt8" onclick="confirmarAtencionSolicitud('${sol.reporte_id}','${modo}',${JSON.stringify(items).replace(/'/g,"\'")})">
+      ${btnTxt}
+    </button>`);
+}
+
+async function confirmarAtencionSolicitud(repId,modo,itemsStr){
+  // For OC mode: collect which items need OC and create them
+  if(modo==="oc"||modo==="parcial"){
+    const items=typeof itemsStr==="string"?JSON.parse(itemsStr):itemsStr;
+    const paraOC=[];
+    items.forEach((it,i)=>{
+      const sel=document.getElementById("sol-accion-"+i);
+      const accion=sel?sel.value:(modo==="oc"?"oc":"stock");
+      if(accion==="oc")paraOC.push(it);
+    });
+    if(paraOC.length>0){
+      // Navigate to compras with pre-filled data
+      closeModal();
+      toast("Abriendo formulario de OC con los ítems seleccionados...");
+      setTimeout(async()=>{
+        goMod("compras");
+        await new Promise(r=>setTimeout(r,500));
+        await modalCompra();
+        // Pre-fill items
+        if(window._cOC!==undefined){
+          // Clear existing and add items
+          const wrap=document.getElementById("oc-items");
+          if(wrap){
+            wrap.innerHTML="";
+            window._cOC=0;
+            for(const it of paraOC){
+              addItemOC();
+              const idx=window._cOC-1;
+              const descEl=document.getElementById("oc-desc-"+idx);
+              const canEl=document.getElementById("oc-can-"+idx);
+              const uniEl=document.getElementById("oc-uni-"+idx);
+              if(descEl)descEl.value=it.desc||it.item_solicitado||"";
+              if(canEl)canEl.value=it.cant||1;
+              if(uniEl)uniEl.value=it.uni||"ud.";
+            }
+          }
+        }
+      },300);
+      // Mark as partially attended
+      if(modo==="parcial")await api("atenderSolicitud",{reporte_id:repId,observacion:"OC generada para algunos ítems"}).catch(()=>{});
+      return;
+    }
+  }
+  // Mark as fully attended
+  const obs=document.getElementById("sol-obs")?.value||"";
+  try{
+    await api("atenderSolicitud",{reporte_id:repId,observacion:obs});
+    closeModal();
+    toast("✓ Solicitud resuelta");
+    loadSolicitudes(document.querySelector("#sol-chips .chip.active")?.dataset.filter||"");
+  }catch(e){toast("Error: "+e.message);}
+}
+
 async function loadTraza(){
   el("d-traza").innerHTML=ldr();
   try{const d=await api("getTrazabilidad");renderTrazaI(d.eventos||[]);}
