@@ -1813,126 +1813,217 @@ async function saveAsignarTecnico(tecId){
 /* ── MIS TAREAS (técnico) ───────────────────────── */
 async function loadMT(){
   el("d-mt").innerHTML=ldr();
+  const u=S.user;
+  const userArea=String(u.area||"").toLowerCase();
+  const esTecnico=userArea==="técnico"||userArea==="tecnico"||userArea==="t?cnico"||
+                  (u.puede&&u.puede.ver_solo_su_obra);
+  const esPanol=userArea==="pañol"||userArea==="panol"||userArea==="paniol";
+  const esOperOrDir=["operaciones","dirección","direccion"].includes(userArea);
+
   try{
-    const [dO,dR]=await Promise.all([
-      api("getObras"),
-      api("getReportesTecnico",{tecnico_id:S.user.user_id})
-    ]);
-    const todasObras=dO.obras||[];
-    const idUser=S.user.user_id||"";
-    const nombreUser=S.user.nombre||"";
-    const normN=str=>String(str||"").toLowerCase().replace(/[^a-z0-9 ]/g,"").replace(/\s+/g," ").trim();
-
-    // Filtrar y DEDUPLICAR por obra_id
-    const vistas=new Set();
-    const misObras=todasObras.filter(o=>{
-      if(vistas.has(o.obra_id))return false;
-      let match=false;
-      // Por user_id (principal - sin problemas de encoding)
-      if(o.jefe_obra===idUser)match=true;
-      // Por nombre normalizado
-      if(!match&&nombreUser&&normN(o.jefe_obra)===normN(nombreUser))match=true;
-      // Por tecnicos_asignados
-      if(!match&&o.tecnicos_asignados){
-        const asig=String(o.tecnicos_asignados);
-        if(asig.indexOf(idUser)>=0)match=true;
-        if(!match){
-          try{
-            const arr=JSON.parse(asig);
-            if(arr.some(v=>String(v)===idUser||(nombreUser&&normN(String(v))===normN(nombreUser))))match=true;
-          }catch(e){}
-        }
-      }
-      if(match)vistas.add(o.obra_id);
-      return match;
-    });
-
-    const misRep=dR.reportes||[];
-
-    // Separar obras activas de terminadas
-    const estadosTerminados=["Cerrada","Para cierre","Eliminada"];
-    const obrasActivas=misObras.filter(o=>!estadosTerminados.includes(o.estado));
-    const obrasTerminadas=misObras.filter(o=>estadosTerminados.includes(o.estado));
-
     let h="";
 
-    // ── OBRAS ACTIVAS ──
-    if(obrasActivas.length){
-      h+=`<div class="card mb12"><div class="ct">🏗 Mis obras activas (${obrasActivas.length})</div>`;
-      obrasActivas.forEach((o,i)=>{
-        const ec={"En ejecución":"b-green","Pendiente OIO":"b-amber","Planificación":"b-blue"};
-        // Reportes de esta obra
-        const repsObra=misRep.filter(r=>r.obra_id===o.obra_id);
-        // Store all needed data in DOM - no closure dependency
-        h+=`<div style="border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:10px"
-          data-mt-obra="${i}"
-          data-obra-id="${o.obra_id}"
-          data-cliente="${(o.cliente||"").replace(/"/g,"&quot;")}"
-          data-estado="${o.estado||""}">
-          <div class="flex between mb8">
-            <div><span class="bold">${o.obra_id}</span> <span class="mu">— ${o.cliente}</span></div>
-            <span class="badge ${ec[o.estado]||"b-gray"}">${o.estado}</span>
-          </div>
-          <div class="xs mu mb8">${o.nombre_obra||""} · Etapa ${o.etapa_actual||0}/8</div>
-          ${repsObra.length?`<div class="xs mu mb8">📋 ${repsObra.length} reporte${repsObra.length>1?"s":""} cargado${repsObra.length>1?"s":""}</div>`:""}
-          <div class="flex gap8 wrap">
-            <button class="btn btn-p btn-xs" data-accion="reporte">📝 Reporte</button>
-            <button class="btn btn-gh btn-xs" data-accion="ver-reportes">📋 Ver historial</button>
-            <button class="btn btn-warn btn-xs" data-accion="solicitar">📦 Solicitar material</button>
-            <button class="btn btn-gh btn-xs" data-accion="estado-tec">🔄 Estado</button>
-          </div>
-        </div>`;
-      });
-      h+=`</div>`;
-    } else {
-      h+=`<div class="al al-i mb12">No tenés obras activas asignadas actualmente.</div>`;
+    // ── PARA PAÑOL: TAREAS DE GESTIÓN ──
+    if(esPanol||esOperOrDir){
+      // Load solicitudes pendientes
+      const dSol=await api("getSolicitudes",{filtro:""});
+      const solsPendientes=(dSol.solicitudes||[]).filter(s=>s.estado_solicitud!=="Atendido");
+
+      if(solsPendientes.length){
+        h+=`<div class="card mb12">
+          <div class="ct">📦 Solicitudes de material pendientes (${solsPendientes.length})</div>
+          <div class="xs mu mb12">Tareas: revisar stock, generar remitos o OCs</div>`;
+
+        solsPendientes.forEach((sol,i)=>{
+          const urgClass=sol.prioridad==="Urgente"?"b-red":sol.prioridad==="Alta"?"b-amber":"b-blue";
+          const urgLabel=sol.prioridad==="Urgente"?"⚠ URGENTE":sol.prioridad==="Alta"?"Alta":"Normal";
+          // Try to parse items
+          let itemCount=0;
+          try{itemCount=(JSON.parse(sol.items_json||"[]")).length;}catch(e){
+            itemCount=String(sol.item_solicitado||"").split("|").filter(x=>x.trim()).length;
+          }
+          h+=`<div style="border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:8px"
+            data-sol-idx="${i}">
+            <div class="flex between mb8">
+              <div>
+                <span class="bold">👷 ${sol.tecnico_nombre||"Técnico"}</span>
+                <span class="badge b-gray" style="margin-left:6px">🏗 ${sol.obra_id||""}</span>
+              </div>
+              <div class="flex gap8">
+                <span class="badge ${urgClass}">${urgLabel}</span>
+                <span class="xs mu">${sol.fecha||""}</span>
+              </div>
+            </div>
+            <div class="xs mu mb8">📦 ${itemCount} ítem${itemCount!==1?"s":""} solicitado${itemCount!==1?"s":""}</div>
+            ${sol.descripcion?`<div class="xs mu mb8">📝 ${sol.descripcion}</div>`:""}
+            <button class="btn btn-p btn-sm" data-mt-accion="procesar-sol" data-sol-id="${sol.reporte_id}">
+              📋 Abrir y procesar solicitud
+            </button>
+          </div>`;
+        });
+        h+=`</div>`;
+
+        // Store for click handler
+        window._mtSols=solsPendientes;
+      } else {
+        h+=`<div class="al al-i mb12">✓ No hay solicitudes pendientes en este momento.</div>`;
+      }
+
+      // Solicitudes parcialmente atendidas (esperando mercadería de OC)
+      const solsParciales=(dSol.solicitudes||[]).filter(s=>String(s.estado_solicitud||"").toLowerCase()==="parcial");
+      if(solsParciales.length){
+        h+=`<div class="card mb12">
+          <div class="ct">⏳ Esperando mercadería (${solsParciales.length})</div>
+          <div class="xs mu mb12">Solicitudes con OCs en proceso — falta entregar al técnico cuando lleguen los materiales</div>`;
+        solsParciales.forEach(sol=>{
+          h+=`<div style="border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:8px;opacity:.85">
+            <div class="flex between mb8">
+              <div>
+                <span class="bold">👷 ${sol.tecnico_nombre||""}</span>
+                <span class="badge b-gray" style="margin-left:6px">🏗 ${sol.obra_id||""}</span>
+              </div>
+              <span class="badge b-amber">Parcial</span>
+            </div>
+            <div class="xs mu">⏳ Aguardando que llegue la mercadería de OC</div>
+          </div>`;
+        });
+        h+=`</div>`;
+      }
+
+      // OCs aprobadas con mercadería para ingresar (para Pañol)
+      if(esPanol){
+        try{
+          const dOC=await api("getCompras");
+          const ocsListasIngresar=(dOC.compras||[]).filter(c=>c.estado==="Aprobado");
+          if(ocsListasIngresar.length){
+            h+=`<div class="card mb12">
+              <div class="ct">📥 OCs aprobadas — pendiente ingresar (${ocsListasIngresar.length})</div>
+              <div class="xs mu mb12">Cuando llegue la mercadería, registrar el ingreso al stock</div>`;
+            ocsListasIngresar.slice(0,10).forEach(oc=>{
+              h+=`<div style="border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:8px">
+                <div class="flex between mb8">
+                  <div><span class="bold">${oc.compra_id}</span>
+                  <span class="xs mu" style="margin-left:6px">${oc.descripcion||oc.item_id||""}</span></div>
+                  <span class="badge b-green">Aprobada</span>
+                </div>
+                <div class="xs mu mb8">📦 ${oc.cantidad_faltante||1} ${oc.unidad||"ud."} ${oc.proveedor?"· 🏭 "+oc.proveedor:""}</div>
+                <button class="btn btn-g btn-sm" data-mt-accion="ingresar-oc" data-oc-id="${oc.compra_id}">
+                  📥 Ingresar mercadería
+                </button>
+              </div>`;
+            });
+            h+=`</div>`;
+          }
+        }catch(e){console.warn("getCompras error",e);}
+      }
     }
 
-    // ── OBRAS TERMINADAS / PARA CIERRE ──
-    if(obrasTerminadas.length){
-      h+=`<div class="card mb12">
-        <div class="ct" style="color:var(--text2)">✅ Obras finalizadas (${obrasTerminadas.length})</div>`;
-      obrasTerminadas.forEach((o,i)=>{
-        const repsObra=misRep.filter(r=>r.obra_id===o.obra_id);
-        h+=`<div style="border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:8px;opacity:.7">
-          <div class="flex between mb4">
-            <div><span class="bold">${o.obra_id}</span> <span class="mu">— ${o.cliente}</span></div>
-            <span class="badge b-gray">${o.estado}</span>
-          </div>
-          <div class="xs mu mb8">${o.nombre_obra||""}</div>
-          ${repsObra.length?`<div class="xs mu mb8">📋 ${repsObra.length} reporte${repsObra.length>1?"s":""}</div>`:""}
-          <button class="btn btn-gh btn-xs"
-            data-accion-fin="ver-reportes"
-            data-obra-fin="${o.obra_id}"
-            data-cliente="${(o.cliente||"").replace(/"/g,"&quot;")}">📋 Ver historial</button>
-        </div>`;
+    // ── PARA TÉCNICO: SUS OBRAS ──
+    if(esTecnico){
+      const [dO,dR]=await Promise.all([
+        api("getObras"),
+        api("getReportesTecnico",{tecnico_id:S.user.user_id})
+      ]);
+      const todasObras=dO.obras||[];
+      const idUser=S.user.user_id||"";
+      const nombreUser=S.user.nombre||"";
+      const normN=str=>String(str||"").toLowerCase().replace(/[^a-z0-9 ]/g,"").replace(/\s+/g," ").trim();
+
+      const vistas=new Set();
+      const misObras=todasObras.filter(o=>{
+        if(vistas.has(o.obra_id))return false;
+        let match=false;
+        if(o.jefe_obra===idUser)match=true;
+        if(!match&&nombreUser&&normN(o.jefe_obra)===normN(nombreUser))match=true;
+        if(!match&&o.tecnicos_asignados){
+          const asig=String(o.tecnicos_asignados);
+          if(asig.indexOf(idUser)>=0)match=true;
+          if(!match){
+            try{
+              const arr=JSON.parse(asig);
+              if(arr.some(v=>String(v)===idUser||(nombreUser&&normN(String(v))===normN(nombreUser))))match=true;
+            }catch(e){}
+          }
+        }
+        if(match)vistas.add(o.obra_id);
+        return match;
       });
-      h+=`</div>`;
+
+      const misRep=dR.reportes||[];
+      const estadosTerminados=["Cerrada","Para cierre","Eliminada"];
+      const obrasActivas=misObras.filter(o=>!estadosTerminados.includes(o.estado));
+      const obrasTerminadas=misObras.filter(o=>estadosTerminados.includes(o.estado));
+
+      if(obrasActivas.length){
+        h+=`<div class="card mb12"><div class="ct">🏗 Mis obras activas (${obrasActivas.length})</div>`;
+        obrasActivas.forEach((o,i)=>{
+          const ec={"En ejecución":"b-green","Pendiente OIO":"b-amber","Planificación":"b-blue"};
+          const repsObra=misRep.filter(r=>r.obra_id===o.obra_id);
+          h+=`<div style="border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:10px"
+            data-mt-obra="${i}"
+            data-obra-id="${o.obra_id}"
+            data-cliente="${(o.cliente||"").replace(/"/g,"&quot;")}"
+            data-estado="${o.estado||""}">
+            <div class="flex between mb8">
+              <div><span class="bold">${o.obra_id}</span> <span class="mu">— ${o.cliente}</span></div>
+              <span class="badge ${ec[o.estado]||"b-gray"}">${o.estado}</span>
+            </div>
+            <div class="xs mu mb8">${o.nombre_obra||""} · Etapa ${o.etapa_actual||0}/8</div>
+            ${repsObra.length?`<div class="xs mu mb8">📋 ${repsObra.length} reporte${repsObra.length>1?"s":""} cargado${repsObra.length>1?"s":""}</div>`:""}
+            <div class="flex gap8 wrap">
+              <button class="btn btn-p btn-xs" data-accion="reporte">📝 Reporte</button>
+              <button class="btn btn-gh btn-xs" data-accion="ver-reportes">📋 Ver historial</button>
+              <button class="btn btn-warn btn-xs" data-accion="solicitar">📦 Solicitar material</button>
+              <button class="btn btn-gh btn-xs" data-accion="estado-tec">🔄 Estado</button>
+            </div>
+          </div>`;
+        });
+        h+=`</div>`;
+      } else if(!h){
+        h+=`<div class="al al-i">No tenés obras activas asignadas actualmente.</div>`;
+      }
+
+      if(obrasTerminadas.length){
+        h+=`<div class="card mb12">
+          <div class="ct" style="color:var(--text2)">✅ Obras finalizadas (${obrasTerminadas.length})</div>`;
+        obrasTerminadas.forEach(o=>{
+          h+=`<div style="border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:8px;opacity:.7">
+            <div class="flex between mb4">
+              <div><span class="bold">${o.obra_id}</span> <span class="mu">— ${o.cliente}</span></div>
+              <span class="badge b-gray">${o.estado}</span>
+            </div>
+            <div class="xs mu mb8">${o.nombre_obra||""}</div>
+            <button class="btn btn-gh btn-xs" data-accion-fin="ver-reportes" data-obra-fin="${o.obra_id}" data-cliente="${(o.cliente||"").replace(/"/g,"&quot;")}">📋 Ver historial</button>
+          </div>`;
+        });
+        h+=`</div>`;
+      }
+
+      window._mtObrasActivas=obrasActivas;
+      window._mtObrasTerminadas=obrasTerminadas;
     }
 
-    // ── ÚLTIMOS REPORTES ──
-    if(misRep.length){
-      const tc={avance:"b-green",pendiente:"b-amber",solicitud:"b-blue",problema:"b-red"};
-      h+=`<div class="card"><div class="ct">📋 Mis últimos reportes</div>`;
-      misRep.slice(0,5).forEach(r=>{
-        h+=`<div class="rcard"><div style="display:flex;justify-content:space-between;margin-bottom:4px">
-          <div><span class="badge ${tc[r.tipo]||"b-gray"}">${r.tipo}</span> <span class="xs mu">${r.obra_id||""}</span></div>
-          <span class="xs mu">${r.fecha||""}</span></div>
-          <div class="sm" style="color:var(--text2)">${r.descripcion||""}</div>
-        </div>`;
-      });
-      h+=`<button class="btn btn-gh btn-sm mt8" onclick="verTodosReportes()">Ver todos mis reportes</button></div>`;
-    }
+    el("d-mt").innerHTML=h||`<div class="mu" style="text-align:center;padding:40px">Sin actividad pendiente</div>`;
 
-    el("d-mt").innerHTML=h||`<div class="mu" style="text-align:center;padding:40px">Sin actividad</div>`;
-
-    // Event delegation para obras activas
-    // Read ALL data from DOM attributes - no closure dependency
+    // Universal click handler
     el("d-mt").onclick=e=>{
+      // Tareas de Pañol/Operaciones
+      const mtAccion=e.target.closest("[data-mt-accion]")?.dataset.mtAccion;
+      if(mtAccion==="procesar-sol"){
+        const solId=e.target.closest("[data-mt-accion]").dataset.solId;
+        const sol=(window._mtSols||[]).find(x=>x.reporte_id===solId);
+        if(sol)modalAtenderSolicitud(sol,"procesar");
+        return;
+      }
+      if(mtAccion==="ingresar-oc"){
+        const ocId=e.target.closest("[data-mt-accion]").dataset.ocId;
+        modalIngresoDesdeOC(ocId);
+        return;
+      }
+      // Acciones obras técnico
       const accion=e.target.closest("[data-accion]")?.dataset.accion;
       if(accion){
         const row=e.target.closest("[data-mt-obra]");if(!row)return;
-        // Read directly from DOM - always current
         const obraId=row.dataset.obraId;
         const cliente=row.dataset.cliente;
         const estado=row.dataset.estado;
@@ -1942,86 +2033,27 @@ async function loadMT(){
         else if(accion==="solicitar")modalSolicitarMaterial(obraId);
         else if(accion==="estado-tec")modalCambiarEstadoTecnico(obraId,estado||"");
       }
-      // Obras terminadas - también por DOM
       const btnFin=e.target.closest("[data-accion-fin]");
       if(btnFin){
         verHistorialObra(btnFin.dataset.obraFin,btnFin.dataset.cliente);
       }
     };
 
-  }catch(e){el("d-mt").innerHTML=`<div class="al al-d">${e.message}<br><button class="btn btn-p btn-sm mt8" onclick="loadMT()">Reintentar</button></div>`;}
-}
-async function verHistorialObra(obraId, cliente){
-  // Capture request ID - if user closes modal before API responds, we cancel
-  const reqId=++_modalReqId;
-  showModal(ldr());
-  try{
-    const d=await api("getReportesTecnico",{tecnico_id:S.user.user_id,obra_id:obraId});
-    if(reqId!==_modalReqId)return; // modal was closed/replaced, abort
-    const reps=d.reportes||[];
-    const tc={avance:"b-green",pendiente:"b-amber",solicitud:"b-blue",problema:"b-red"};
-    let h=`<button class="mo-x" onclick="closeModal()">✕</button>
-      <div class="mo-t">📋 Historial de reportes</div>
-      <div class="xs mu mb12">🏗 ${obraId}${cliente?" — "+cliente:""}</div>`;
-    if(!reps.length){
-      h+=`<div class="al al-i">Sin reportes cargados para esta obra aún.</div>`;
-    } else {
-      h+=`<div class="xs mu mb12">${reps.length} reporte${reps.length>1?"s":""} cargado${reps.length>1?"s":""}</div>`;
-      reps.forEach(r=>{
-        h+=`<div class="rcard mb8">
-          <div style="display:flex;justify-content:space-between;margin-bottom:6px">
-            <div><span class="badge ${tc[r.tipo]||"b-gray"}">${r.tipo}</span>
-            <span class="xs mu" style="margin-left:6px">${r.tecnico_nombre||""}</span></div>
-            <span class="xs mu">${r.fecha||""}</span>
-          </div>
-          <div class="sm mb4" style="color:var(--text)">${r.descripcion||""}</div>
-          ${r.pendientes?`<div class="xs mu mt4">⏳ Pendiente: ${r.pendientes}</div>`:""}
-          ${r.materiales_solicitados?`<div class="xs mu mt4">📦 Material: ${r.materiales_solicitados}</div>`:""}
-          ${r.fotos?`<div class="xs mu mt4">📷 ${r.fotos}</div>`:""}
-        </div>`;
-      });
-    }
-    h+=`<button class="btn btn-p btn-bl mt8" onclick="closeModal();modalReporteDiario('${obraId}','${(cliente||"").replace(/'/g,"\'")}')">📝 Nuevo reporte</button>`;
-    showModalSafe(h,reqId);
   }catch(e){
-    showModalSafe(`<button class="mo-x" onclick="closeModal()">✕</button><div class="al al-d">${e.message}</div>`,reqId);
+    el("d-mt").innerHTML=`<div class="al al-d">${e.message}<br><button class="btn btn-p btn-sm mt8" onclick="loadMT()">Reintentar</button></div>`;
   }
 }
 
-async function verTodosReportes(){
-  const reqId=++_modalReqId;showModal(ldr());
-  try{
-    const d=await api("getReportesTecnico",{tecnico_id:S.user.user_id});
-    const reps=d.reportes||[];
-    const tc={avance:"b-green",pendiente:"b-amber",solicitud:"b-blue",problema:"b-red"};
-    // Group by obra
-    const byObra={};
-    reps.forEach(r=>{
-      if(!byObra[r.obra_id])byObra[r.obra_id]=[];
-      byObra[r.obra_id].push(r);
-    });
-    let h=`<button class="mo-x" onclick="closeModal()">✕</button>
-      <div class="mo-t">📋 Todos mis reportes</div>`;
-    if(!reps.length){h+=`<div class="al al-i">Sin reportes cargados aún.</div>`;}
-    else{
-      Object.entries(byObra).forEach(([obraId,oreps])=>{
-        h+=`<div class="card mb12">
-          <div class="ct">🏗 ${obraId} (${oreps.length} reporte${oreps.length>1?"s":""})</div>`;
-        oreps.forEach(r=>{
-          h+=`<div class="rcard mb8">
-            <div style="display:flex;justify-content:space-between;margin-bottom:4px">
-              <span class="badge ${tc[r.tipo]||"b-gray"}">${r.tipo}</span>
-              <span class="xs mu">${r.fecha||""}</span>
-            </div>
-            <div class="sm" style="color:var(--text)">${r.descripcion||""}</div>
-            ${r.pendientes?`<div class="xs mu mt4">⏳ ${r.pendientes}</div>`:""}
-          </div>`;
-        });
-        h+=`</div>`;
-      });
-    }
-    showModal(h);
-  }catch(e){showModal(`<button class="mo-x" onclick="closeModal()">✕</button><div class="al al-d">${e.message}</div>`);}
+function modalIngresoDesdeOC(ocId){
+  // Pre-fill modalIngreso with this OC selected
+  modalIngreso();
+  setTimeout(()=>{
+    const sel=document.getElementById("ing-tipo");
+    if(sel){sel.value="oc";document.getElementById("ing-oc-wrap")?.classList.remove("hidden");}
+    const ocSel=document.getElementById("ing-oc");
+    if(ocSel)ocSel.value=ocId;
+    if(typeof autoFillDesdeOC==="function")autoFillDesdeOC();
+  },200);
 }
 
 function modalReporteDiario(obraId,cliente){
@@ -2396,11 +2428,11 @@ function modalEditUser(id,nombre,email,area,rol){
   const savedPerms=uData.permisos_custom||{};
   // Defaults por área si no hay custom
   const DEFAULT_MODS={
-    "Dirección":["dashboard","crm","obras","inventario","movimientos","compras","costos","tecnicos","remitos","usuarios","trazabilidad"],
-    "Operaciones":["dashboard","obras","inventario","movimientos","compras","costos","tecnicos","solicitudes","remitos","trazabilidad"],
+    "Dirección":["dashboard","mis_tareas","crm","obras","inventario","movimientos","compras","costos","tecnicos","solicitudes","remitos","usuarios","trazabilidad"],
+    "Operaciones":["dashboard","mis_tareas","obras","inventario","movimientos","compras","costos","tecnicos","solicitudes","remitos","trazabilidad"],
     "Comercial":["dashboard","crm","obras","inventario","compras","costos","remitos","trazabilidad"],
     "Técnico":["dashboard","mis_tareas","inventario","movimientos"],
-    "Pañol":["dashboard","inventario","movimientos","compras","solicitudes"],
+    "Pañol":["dashboard","mis_tareas","inventario","movimientos","compras","solicitudes"],
     "Contabilidad":["dashboard","costos","inventario","compras","remitos","trazabilidad","crm"]
   };
   const activeMods=savedMods.length?savedMods:(DEFAULT_MODS[area]||["dashboard"]);
@@ -2418,7 +2450,7 @@ function modalEditUser(id,nombre,email,area,rol){
     <div class="card mt8"><div class="ct">🔐 Permisos</div>${permsHtml}</div>
     <button class="btn btn-p btn-bl mt8" onclick="saveEditUser('${id}')">Guardar</button>`);
 }
-const DEFAULT_MODS_MAP={"Dirección":["dashboard","crm","obras","inventario","movimientos","compras","costos","tecnicos","remitos","usuarios","trazabilidad"],"Operaciones":["dashboard","obras","inventario","movimientos","compras","costos","tecnicos","solicitudes","remitos","trazabilidad"],"Comercial":["dashboard","crm","obras","inventario","compras","costos","remitos","trazabilidad"],"Técnico":["dashboard","mis_tareas","inventario","movimientos"],"Pañol":["dashboard","inventario","movimientos","compras","solicitudes"],"Contabilidad":["dashboard","costos","inventario","compras","remitos","trazabilidad","crm"]};
+const DEFAULT_MODS_MAP={"Dirección":["dashboard","mis_tareas","crm","obras","inventario","movimientos","compras","costos","tecnicos","solicitudes","remitos","usuarios","trazabilidad"],"Operaciones":["dashboard","mis_tareas","obras","inventario","movimientos","compras","costos","tecnicos","solicitudes","remitos","trazabilidad"],"Comercial":["dashboard","crm","obras","inventario","compras","costos","remitos","trazabilidad"],"Técnico":["dashboard","mis_tareas","inventario","movimientos"],"Pañol":["dashboard","mis_tareas","inventario","movimientos","compras","solicitudes"],"Contabilidad":["dashboard","costos","inventario","compras","remitos","trazabilidad","crm"]};
 function aplicarDefaults(area){
   const mods=DEFAULT_MODS_MAP[area]||["dashboard"];
   ["dashboard","crm","obras","remitos","costos","inventario","movimientos","compras","tecnicos","mis_tareas","usuarios","trazabilidad"].forEach(k=>{
