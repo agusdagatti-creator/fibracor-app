@@ -837,13 +837,18 @@ function renderInv(){
 function renderInvItems(lista){
   const dEl=el("d-inv"),vP=S.user.puede?.ver_precios;
   if(!lista.length){dEl.innerHTML=`<div class="loader" style="padding:40px"><span class="mu">Sin ítems</span></div>`;return;}
+  const puedeEditar=S.user.area!=="Técnico";
   dEl.innerHTML=lista.map((it,i)=>{
     const tot=(it.stock_disponible+it.stock_en_obra+it.stock_fuera_servicio)||1;
     const pD=Math.round(it.stock_disponible/tot*100),pO=Math.round(it.stock_en_obra/tot*100),pF=Math.round(it.stock_fuera_servicio/tot*100);
+    const prov=it.proveedor_principal||it.proveedor||"";
     return `<div class="icard ${it.alerta_critica?"crit":"ok"}" data-inv="${i}">
       <div class="flex between mb8"><div><span class="bold">${it.descripcion}</span> <span class="xs mu">${it.item_id}</span></div>
       <span class="badge ${it.alerta_critica?"b-red":"b-green"}">${it.alerta_critica?"⚠ Bajo stock":"✓ OK"}</span></div>
-      <span class="badge b-gray xs mb8">${it.categoria}</span>
+      <div class="flex gap8 wrap mb8">
+        <span class="badge b-gray xs">${it.categoria}</span>
+        ${prov?`<span class="badge xs" style="background:rgba(167,139,250,.15);color:#c4b5fd;border:1px solid rgba(167,139,250,.3)">🏭 ${prov}</span>`:`<span class="badge b-gray xs" style="opacity:.5">🏭 sin proveedor</span>`}
+      </div>
       <div class="flex gap8 sm mb8" style="flex-wrap:wrap;margin-top:6px">
         <span style="color:var(--ag)">● ${it.stock_disponible} disp.</span>
         <span style="color:var(--ac)">● ${it.stock_en_obra} obra</span>
@@ -858,8 +863,10 @@ function renderInvItems(lista){
       ${vP?`<div class="xs mu mb8">💲 Costo: $${(it.precio_costo||0).toLocaleString("es-AR")} · Lista: $${(it.precio_lista||0).toLocaleString("es-AR")}</div>`:""}
       <div class="flex gap8 wrap">
         <button class="btn btn-gh btn-xs" data-accion="historial">📋 Historial</button>
-        ${S.user.area!=="Técnico"?`<button class="btn btn-gh btn-xs" data-accion="ajustar">⚙ Ajustar</button>`:""}
+        ${puedeEditar?`<button class="btn btn-gh btn-xs" data-accion="editar">✏ Editar</button>`:""}
+        ${puedeEditar?`<button class="btn btn-gh btn-xs" data-accion="ajustar">⚙ Ajustar</button>`:""}
         ${vP?`<button class="btn btn-gh btn-xs" data-accion="precios">💲 Precios</button>`:""}
+        ${puedeEditar?`<button class="btn btn-gh btn-xs" data-accion="oc">🛒 Generar OC</button>`:""}
       </div>
     </div>`;
   }).join("");
@@ -868,14 +875,112 @@ function renderInvItems(lista){
     const card=e.target.closest("[data-inv]");if(!card)return;
     const it=lista[parseInt(card.dataset.inv)];if(!it)return;
     if(accion==="historial")verHistItem(it.item_id);
+    else if(accion==="editar")modalEditarItem(it);
     else if(accion==="ajustar")modalAjuste(it.item_id,it.stock_disponible,it.stock_fuera_servicio,it.stock_minimo);
     else if(accion==="precios")modalPrecios(it.item_id,it.precio_costo||0,it.precio_lista||0);
+    else if(accion==="oc")modalCompraDesdeItem(it);
   };
 }
-function modalCrearItem(){
+
+async function modalEditarItem(it){
+  await ensureProveedores();
   const vP=S.user.puede?.ver_precios;
+  showModal('<button class="mo-x" onclick="closeModal()">✕</button>'
+    +'<div class="mo-t">✏ Editar ítem '+it.item_id+'</div>'
+    +'<div class="g2f"><div class="fg"><label>CATEGORÍA</label>'
+      +'<select class="sel" id="ed-cat">'
+      +['Consumo','Herramienta','Reutilizable','Insumo','Equipo especial'].map(c=>'<option'+(it.categoria===c?' selected':'')+'>'+c+'</option>').join('')
+      +'</select>'
+    +'</div>'
+    +'<div class="fg"><label>UNIDAD</label><input class="inp" id="ed-uni" value="'+(it.unidad||'')+'"></div></div>'
+    +'<div class="fg"><label>DESCRIPCIÓN *</label><input class="inp" id="ed-desc" value="'+(it.descripcion||'').replace(/"/g,"&quot;")+'"></div>'
+    +'<div class="g2f"><div class="fg"><label>STOCK MÍNIMO</label><input class="inp" type="number" id="ed-min" value="'+(it.stock_minimo||0)+'"></div>'
+    +'<div class="fg"><label>N° SERIE</label><input class="inp" id="ed-sn" value="'+(it.numero_serie||'')+'"></div></div>'
+    +'<div class="fg"><label>🏭 PROVEEDOR PRINCIPAL</label>'+provDropdown("ed-prov",it.proveedor_principal||it.proveedor||"")+'</div>'
+    +(vP?'<div class="g2f"><div class="fg"><label>PRECIO COSTO ($)</label><input class="inp" type="number" id="ed-pc" value="'+(it.precio_costo||0)+'"></div>'
+      +'<div class="fg"><label>PRECIO LISTA ($)</label><input class="inp" type="number" id="ed-pl" value="'+(it.precio_lista||0)+'"></div></div>':'')
+    +'<button class="btn btn-p btn-bl" onclick="saveEditarItem(\''+it.item_id+'\')">Guardar cambios</button>');
+}
+
+async function saveEditarItem(itemId){
+  const body={item_id:itemId};
+  ["desc","cat","uni","min","sn","prov","pc","pl"].forEach(k=>{
+    const map={desc:"descripcion",cat:"categoria",uni:"unidad",min:"stock_minimo",sn:"numero_serie",prov:"proveedor_principal",pc:"precio_costo",pl:"precio_lista"};
+    const v=g("ed-"+k);
+    if(v!==undefined&&v!==null)body[map[k]]=v;
+  });
+  try{
+    await api("actualizarItem",body);
+    closeModal();
+    toast("✓ Ítem actualizado");
+    loadInv();
+  }catch(e){toast("Error: "+e.message);}
+}
+
+async function modalCompraDesdeItem(it){
+  await ensureProveedores();
+  await ensureAprobadores();
+  const obras=(S.obras||[]).map(o=>'<option value="'+o.obra_id+'">'+o.obra_id+' — '+o.cliente+'</option>').join('');
+  const aprobOpts=(S._aprobadores||[]).map(u=>'<option value="'+u.user_id+'">'+u.nombre+' ('+u.area+')</option>').join('');
+
+  const provDefault=it.proveedor_principal||it.proveedor||'';
+
+  showModal('<button class="mo-x" onclick="closeModal()">✕</button>'
+    +'<div class="mo-t">🛒 Generar OC para '+it.descripcion+'</div>'
+    +'<div class="al al-i mb12">📦 Stock actual: '+it.stock_disponible+' '+(it.unidad||'ud.')+(it.stock_minimo>0?' (mín: '+it.stock_minimo+')':'')+'</div>'
+    +'<div class="g2f">'
+      +'<div class="fg"><label>OBRA</label>'
+        +'<select class="sel" id="ci-ob"><option value="">— sin obra —</option>'+obras+'</select>'
+      +'</div>'
+      +'<div class="fg"><label>🏭 PROVEEDOR</label>'+provDropdown("ci-pv",provDefault)+'</div>'
+    +'</div>'
+    +'<div class="g2f">'
+      +'<div class="fg"><label>CANTIDAD *</label><input class="inp" type="number" id="ci-ca" min="1"></div>'
+      +'<div class="fg"><label>PRIORIDAD</label>'
+        +'<select class="sel" id="ci-pr"><option>Normal</option><option>Media</option><option>Alta</option><option>Urgente</option></select>'
+      +'</div>'
+    +'</div>'
+    +'<div class="fg"><label>🔔 DIRIGIR APROBACIÓN A</label>'
+      +'<select class="sel" id="ci-aprob"><option value="">— sin asignar —</option>'+aprobOpts+'</select>'
+    +'</div>'
+    +'<div class="fg"><label>OBSERVACIÓN</label><input class="inp" id="ci-obs" placeholder="Motivo de la compra..."></div>'
+    +'<button class="btn btn-p btn-bl" onclick="saveCompraDesdeItem(\''+it.item_id+'\')">Solicitar OC</button>');
+}
+
+async function saveCompraDesdeItem(itemId){
+  const cant=parseFloat(g("ci-ca"))||0;
+  if(cant<=0){toast("Cantidad requerida");return;}
+  const body={
+    obra_id:g("ci-ob")||"",
+    item_id:itemId,
+    cantidad_faltante:cant,
+    proveedor:g("ci-pv")||"",
+    prioridad:g("ci-pr")||"Normal",
+    aprobador_id:g("ci-aprob")||"",
+    observaciones:g("ci-obs")||""
+  };
+  try{
+    await api("createCompra",body);
+    closeModal();
+    toast("✓ Solicitud de OC creada");
+    loadInv();
+  }catch(e){toast("Error: "+e.message);}
+}
+
+async function ensureAprobadores(){
+  if(!S._aprobadores||!S._aprobadores.length){
+    try{
+      const d=await api("getUsuarios");
+      S._aprobadores=(d.usuarios||[]).filter(u=>["Dirección","Contabilidad"].includes(u.area)&&u.activo);
+    }catch(e){S._aprobadores=[];}
+  }
+  return S._aprobadores;
+}
+async function modalCrearItem(){
+  const vP=S.user.puede?.ver_precios;
+  await ensureProveedores();
   showModal(`<button class="mo-x" onclick="closeModal()">✕</button>
-    <div class="mo-t">Nuevo ítem de stock</div>
+    <div class="mo-t">📦 Nuevo ítem de stock</div>
     <div class="g2f"><div class="fg"><label>CÓDIGO *</label><input class="inp" id="ni-id" placeholder="MAT-010"></div>
     <div class="fg"><label>CATEGORÍA</label><select class="sel" id="ni-cat"><option>Consumo</option><option>Herramienta</option><option>Reutilizable</option><option>Insumo</option><option>Equipo especial</option></select></div></div>
     <div class="fg"><label>DESCRIPCIÓN *</label><input class="inp" id="ni-desc"></div>
@@ -883,14 +988,31 @@ function modalCrearItem(){
     <div class="fg"><label>STOCK INICIAL</label><input class="inp" type="number" id="ni-si" value="0"></div></div>
     <div class="g2f"><div class="fg"><label>STOCK MÍNIMO</label><input class="inp" type="number" id="ni-min" value="0"></div>
     <div class="fg"><label>N° SERIE</label><input class="inp" id="ni-sn"></div></div>
+    <div class="fg"><label>🏭 PROVEEDOR PRINCIPAL</label>${provDropdown("ni-prov","",{placeholder:"Buscar proveedor..."})}</div>
     ${vP?`<div class="g2f"><div class="fg"><label>PRECIO COSTO ($)</label><input class="inp" type="number" id="ni-pc" value="0"></div>
     <div class="fg"><label>PRECIO LISTA ($)</label><input class="inp" type="number" id="ni-pl" value="0"></div></div>`:""}
     <button class="btn btn-p btn-bl" onclick="saveItem()">Crear ítem</button>`);
 }
 async function saveItem(){
-  const body={item_id:g("ni-id"),descripcion:g("ni-desc"),categoria:g("ni-cat"),unidad:g("ni-uni"),stock_inicial:g("ni-si"),stock_minimo:g("ni-min"),numero_serie:g("ni-sn"),precio_costo:g("ni-pc")||0,precio_lista:g("ni-pl")||0};
+  const body={
+    item_id:g("ni-id"),
+    descripcion:g("ni-desc"),
+    categoria:g("ni-cat"),
+    unidad:g("ni-uni"),
+    stock_inicial:g("ni-si"),
+    stock_minimo:g("ni-min"),
+    numero_serie:g("ni-sn"),
+    precio_costo:g("ni-pc")||0,
+    precio_lista:g("ni-pl")||0,
+    proveedor_principal:g("ni-prov")||""
+  };
   if(!body.item_id||!body.descripcion){toast("Código y descripción requeridos");return;}
-  try{await api("crearItem",body);closeModal();toast("✓ Ítem creado");loadInv();}catch(e){toast("Error: "+e.message);}
+  try{
+    await api("crearItem",body);
+    closeModal();
+    toast("✓ Ítem creado");
+    loadInv();
+  }catch(e){toast("Error: "+e.message);}
 }
 function modalPrecios(id,pc,pl){
   showModal(`<button class="mo-x" onclick="closeModal()">✕</button>
@@ -1278,7 +1400,37 @@ async function verOC(id){
       <button class="btn btn-gh btn-bl mt8" onclick="window.print()">🖨 Imprimir OC</button>`);
   }catch(e){showModal(`<button class="mo-x" onclick="closeModal()">✕</button><div class="al al-d">${e.message}</div>`);}
 }
+
+// ═══════════════════════════════════════════════════════
+// Helper: dropdown de proveedores con búsqueda/datalist
+// ═══════════════════════════════════════════════════════
+function provDropdown(id, currentValue, opts){
+  // Genera input con datalist - permite escribir Y elegir de la lista
+  // opts: { placeholder: "...", required: false }
+  opts = opts || {};
+  const lista = (S.proveedores||[]).filter(p=>p.activo!==false&&p.activo!=="false");
+  const opciones = lista.map(p =>
+    '<option value="'+(p.nombre||"").replace(/"/g,"&quot;")+'">'
+  ).join("");
+  const dlId = id+"-dl";
+  return '<input class="inp" id="'+id+'" list="'+dlId+'" placeholder="'+(opts.placeholder||"Buscar proveedor...")+'" value="'+(currentValue||"").replace(/"/g,"&quot;")+'">'
+    +'<datalist id="'+dlId+'">'+opciones+'</datalist>'
+    +'<div class="xs mu mt4">💡 '+lista.length+' proveedores cargados — escribí para buscar o elegir uno nuevo</div>';
+}
+
+// Async pre-load proveedores into S.proveedores if not loaded
+async function ensureProveedores(){
+  if(!S.proveedores||!S.proveedores.length){
+    try{
+      const d=await api("getProveedores");
+      S.proveedores=d.proveedores||[];
+    }catch(e){S.proveedores=S.proveedores||[];}
+  }
+  return S.proveedores;
+}
+
 async function modalCompra(){
+  await ensureProveedores();
   if(!S.inv.length){toast("Cargando inventario...");await loadInv();}
   if(!S._aprobadores){
     try{const d=await api("getUsuarios");S._aprobadores=(d.usuarios||[]).filter(u=>["Dirección","Contabilidad","Comercial"].includes(u.area)&&u.activo);}catch(e){S._aprobadores=[];}
@@ -1800,18 +1952,161 @@ async function confirmarIngresoMasivo(provId){
   }
   setTimeout(()=>verProveedor(provId),200);
 }
-function modalCompraDesdeProveedor(provId,provNombre){
-  const items=S.inv.map(i=>`<option value="${i.item_id}">${i.descripcion} (${i.item_id})</option>`).join("");
-  const obras=S.obras.map(o=>`<option value="${o.obra_id}">${o.obra_id} — ${o.cliente}</option>`).join("");
-  showModal(`<button class="mo-x" onclick="closeModal()">✕</button>
-    <div class="mo-t">Nueva OC — ${provNombre}</div>
-    <div class="fg"><label>OBRA</label><select class="sel" id="cp-ob"><option value="">— sin obra —</option>${obras}</select></div>
-    <div class="fg"><label>ÍTEM *</label><select class="sel" id="cp-it" onchange="autoDescCP()"><option value="">—</option>${items}</select></div>
-    <div class="fg"><label>DESCRIPCIÓN</label><input class="inp" id="cp-de"></div>
-    <div class="g2f"><div class="fg"><label>CANTIDAD *</label><input class="inp" type="number" id="cp-ca"></div><div class="fg"><label>UNIDAD</label><input class="inp" id="cp-un"></div></div>
-    <div class="fg"><label>PRIORIDAD</label><select class="sel" id="cp-pr"><option>Normal</option><option>Media</option><option>Alta</option><option>Urgente</option></select></div>
-    <button class="btn btn-p btn-bl" onclick="saveCompraProveedor('${provNombre}')">Enviar solicitud</button>`);
+async function modalCompraDesdeProveedor(provId,provNombre){
+  await ensureAprobadores();
+  if(!S.inv||!S.inv.length){try{const d=await api("getInventario");S.inv=d.items||[];}catch(e){}}
+  if(!S.obras||!S.obras.length){try{const d=await api("getObras");S.obras=d.obras||[];}catch(e){}}
+
+  // Pre-load items that have this provider as principal
+  const itemsDelProv=(S.inv||[]).filter(i=>(i.proveedor_principal||i.proveedor||"").toLowerCase()===provNombre.toLowerCase());
+  const itemsTodos=(S.inv||[]);
+  const obras=(S.obras||[]).map(o=>'<option value="'+o.obra_id+'">'+o.obra_id+' — '+o.cliente+'</option>').join('');
+  const aprobOpts=(S._aprobadores||[]).map(u=>'<option value="'+u.user_id+'">'+u.nombre+' ('+u.area+')</option>').join('');
+
+  window._cpItems=[];
+  window._cpProv=provNombre;
+
+  showModal('<button class="mo-x" onclick="closeModal()">✕</button>'
+    +'<div class="mo-t">🛒 Nueva OC — 🏭 '+provNombre+'</div>'
+    +(itemsDelProv.length?'<div class="al al-i mb12">📦 Este proveedor tiene <b>'+itemsDelProv.length+' ítem'+(itemsDelProv.length>1?"s":"")+'</b> en tu catálogo. Filtrá la búsqueda con "Solo de este proveedor".</div>':'')
+    +'<div class="g2f">'
+      +'<div class="fg"><label>OBRA</label><select class="sel" id="cp-ob"><option value="">— sin obra —</option>'+obras+'</select></div>'
+      +'<div class="fg"><label>PRIORIDAD</label>'
+        +'<select class="sel" id="cp-pr"><option>Normal</option><option>Media</option><option>Alta</option><option>Urgente</option></select>'
+      +'</div>'
+    +'</div>'
+    +'<div class="fg"><label>🔔 DIRIGIR APROBACIÓN A</label>'
+      +'<select class="sel" id="cp-aprob"><option value="">— sin asignar —</option>'+aprobOpts+'</select>'
+    +'</div>'
+    +'<div class="card mb12" style="background:var(--card2);padding:12px">'
+      +'<div class="ct" style="font-size:12px">➕ Agregar ítems</div>'
+      +'<div class="fg">'
+        +'<label><input type="checkbox" id="cp-only-prov" '+(itemsDelProv.length>0?'checked':'')+' onchange="cpFilterItems()"> Solo ítems de este proveedor</label>'
+      +'</div>'
+      +'<div class="fg"><label>BUSCAR</label>'
+        +'<input class="inp" id="cp-busca" placeholder="Filtrar ítems..." oninput="cpFilterItems()">'
+      +'</div>'
+      +'<div class="fg"><label>ÍTEM</label>'
+        +'<select class="sel" id="cp-it" onchange="cpAutoFill()">'
+          +'<option value="">— elegir ítem o crear manual —</option>'
+        +'</select>'
+      +'</div>'
+      +'<div class="g2f">'
+        +'<div class="fg"><label>DESCRIPCIÓN</label><input class="inp" id="cp-de"></div>'
+        +'<div class="fg"><label>UNIDAD</label><input class="inp" id="cp-un"></div>'
+      +'</div>'
+      +'<div class="fg"><label>CANTIDAD *</label><input class="inp" type="number" id="cp-ca" min="0.01" step="0.01"></div>'
+      +'<button class="btn btn-g btn-sm" onclick="cpAgregarItem()">+ Agregar a la OC</button>'
+    +'</div>'
+    +'<div id="cp-lista-wrap" class="hidden">'
+      +'<div class="ct">📋 Ítems en esta OC</div>'
+      +'<div id="cp-lista"></div>'
+    +'</div>'
+    +'<div class="fg"><label>OBSERVACIÓN</label><input class="inp" id="cp-obs" placeholder="Comentario para compras..."></div>'
+    +'<button class="btn btn-p btn-bl" onclick="saveCompraProveedorMulti()">📤 Enviar solicitud de OC</button>');
+
+  cpFilterItems();
 }
+
+function cpFilterItems(){
+  const onlyProv=document.getElementById("cp-only-prov")?.checked;
+  const q=document.getElementById("cp-busca")?.value?.toLowerCase()?.trim()||"";
+  const provNombre=window._cpProv||"";
+  let lista=S.inv||[];
+  if(onlyProv){
+    lista=lista.filter(i=>(i.proveedor_principal||i.proveedor||"").toLowerCase()===provNombre.toLowerCase());
+  }
+  if(q){
+    lista=lista.filter(i=>(i.descripcion||"").toLowerCase().includes(q)||(i.item_id||"").toLowerCase().includes(q));
+  }
+  const sel=document.getElementById("cp-it");
+  if(!sel)return;
+  sel.innerHTML='<option value="">— elegir ítem o crear manual —</option>'
+    +lista.map(i=>'<option value="'+i.item_id+'">'+i.descripcion+' ('+i.item_id+')'+(i.proveedor_principal?' · 🏭 '+i.proveedor_principal:'')+'</option>').join('');
+}
+
+function cpAutoFill(){
+  const itId=document.getElementById("cp-it")?.value;
+  if(!itId)return;
+  const it=(S.inv||[]).find(i=>i.item_id===itId);
+  if(!it)return;
+  const de=document.getElementById("cp-de");
+  const un=document.getElementById("cp-un");
+  if(de)de.value=it.descripcion||"";
+  if(un)un.value=it.unidad||"ud.";
+}
+
+function cpAgregarItem(){
+  const itemId=document.getElementById("cp-it")?.value||"";
+  const desc=document.getElementById("cp-de")?.value?.trim();
+  const cant=parseFloat(document.getElementById("cp-ca")?.value)||0;
+  const uni=document.getElementById("cp-un")?.value||"ud.";
+  if(!desc){toast("Descripción requerida");return;}
+  if(cant<=0){toast("Cantidad inválida");return;}
+
+  if(!window._cpItems)window._cpItems=[];
+  window._cpItems.push({itemId,descripcion:desc,cantidad_faltante:cant,unidad:uni});
+  renderCpLista();
+
+  // Reset fields
+  ["cp-it","cp-de","cp-un","cp-ca","cp-busca"].forEach(id=>{const e=document.getElementById(id);if(e)e.value="";});
+  cpFilterItems();
+  toast("✓ Ítem agregado");
+}
+
+function renderCpLista(){
+  const items=window._cpItems||[];
+  const wrap=document.getElementById("cp-lista-wrap");
+  const lista=document.getElementById("cp-lista");
+  if(!wrap||!lista)return;
+  if(!items.length){wrap.classList.add("hidden");return;}
+  wrap.classList.remove("hidden");
+  lista.innerHTML=items.map((it,i)=>
+    '<div style="display:flex;align-items:center;gap:8px;padding:8px;background:var(--card2);border:1px solid var(--border2);border-radius:8px;margin-bottom:6px">'
+      +'<div style="flex:1">'
+        +'<div class="sm bold">'+it.descripcion+'</div>'
+        +'<div class="xs mu">'+it.cantidad_faltante+' '+it.unidad+(it.itemId?' · '+it.itemId:'')+'</div>'
+      +'</div>'
+      +'<button class="btn btn-r btn-xs" onclick="cpQuitarItem('+i+')">✕</button>'
+    +'</div>').join("");
+}
+
+function cpQuitarItem(i){
+  if(window._cpItems)window._cpItems.splice(i,1);
+  renderCpLista();
+}
+
+async function saveCompraProveedorMulti(){
+  const items=window._cpItems||[];
+  if(!items.length){toast("Agregá al menos un ítem");return;}
+  const provNombre=window._cpProv||"";
+  const obraId=g("cp-ob")||"";
+  const prio=g("cp-pr")||"Normal";
+  const obs=g("cp-obs")||"";
+  const aprob=g("cp-aprob")||"";
+
+  const btn=document.querySelector("#mc .btn-p.btn-bl");
+  if(btn){btn.disabled=true;btn.textContent="Enviando...";}
+  try{
+    const res=await api("createCompraMulti",{
+      obra_id:obraId,
+      proveedor:provNombre,
+      prioridad:prio,
+      observaciones:obs,
+      aprobador_id:aprob,
+      items:JSON.stringify(items)
+    });
+    closeModal();
+    toast("✓ "+(res.compraIds||[]).length+" OC"+((res.compraIds||[]).length>1?"s":"")+" generada"+((res.compraIds||[]).length>1?"s":"")+" para "+provNombre);
+    window._cpItems=[];
+    if(typeof loadCompras==="function")loadCompras();
+  }catch(e){
+    if(btn){btn.disabled=false;btn.textContent="📤 Enviar solicitud de OC";}
+    toast("Error: "+e.message);
+  }
+}
+
+function autoDescCP(){const it=S.inv.find(i=>i.item_id===g("cp-it"));if(it){el("cp-de").value=it.descripcion;el("cp-un").value=it.unidad||"";}}
 function autoDescCP(){const it=S.inv.find(i=>i.item_id===g("cp-it"));if(it){el("cp-de").value=it.descripcion;el("cp-un").value=it.unidad||"";}}
 async function saveCompraProveedor(prov){
   const body={obra_id:g("cp-ob"),item_id:g("cp-it"),descripcion:g("cp-de"),cantidad_faltante:g("cp-ca"),unidad:g("cp-un"),proveedor:prov,prioridad:g("cp-pr")};
@@ -3017,7 +3312,8 @@ async function loadSolicitudes(filtro){
 }
 
 
-function abrirGestionObra(grupo){
+async function abrirGestionObra(grupo){
+  await ensureProveedores();
   // Aggregate all items from all pending solicitudes of this obra
   // Each item carries reference to its source solicitud
   const allItems=[];
@@ -3163,7 +3459,7 @@ function abrirGestionObra(grupo){
         +'<div class="xs mu mt4" id="obra-oc-preview">— marcá ítems para ver preview —</div>'
       +'</div>'
       +'<div class="fg"><label>PROVEEDOR DEFAULT (para ítems sin proveedor asignado)</label>'
-        +'<input class="inp" id="obra-prov-oc" placeholder="Nombre del proveedor...">'
+        +provDropdown("obra-prov-oc","",{placeholder:"Buscar o escribir proveedor..."})
       +'</div>'
     +'</div>'
     +'<div class="flex gap8 wrap" style="margin-top:12px">'
@@ -3582,7 +3878,7 @@ function abrirSolicitudDetalle(sol){
         +'<input class="inp" id="sol-nota-remito" placeholder="Ej: Entregado en obra...">'
       +'</div>'
       +'<div class="fg"><label>PROVEEDOR PARA OC (opcional)</label>'
-        +'<input class="inp" id="sol-prov-oc" placeholder="Nombre del proveedor...">'
+        +provDropdown("sol-prov-oc","",{placeholder:"Buscar o escribir proveedor..."})
       +'</div>'
       +'<div class="flex gap8 wrap" style="margin-top:12px">'
         +'<button class="btn btn-g btn-sm" onclick="ejecutarAccionSolicitud(\''+sol.reporte_id+'\',\'stock\')">✓ Entregar seleccionados</button>'
