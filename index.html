@@ -2804,11 +2804,11 @@ async function loadMT(){
         window._mtHerramientas=herrasig;
       } else {
         if(dHerr._error){
-          h+=`<div class="al al-w" style="margin:8px">⚠ El endpoint <code>getHerramientasAsignadas</code> no responde. Esto significa que el Apps Script no fue redeployado con la última versión. Avisar a Dirección.</div>`;
+          h+=`<div class="al al-w" style="margin:8px">⚠ El endpoint <code>getHerramientasAsignadas</code> no responde. El Apps Script necesita ser redeployado con la última versión (Deploy → Manage deployments → New version).</div>`;
         } else {
-          h+=`<div class="xs mu" style="padding:8px">No tenés herramientas asignadas en este momento.</div>
-          <div class="xs mu" style="padding:8px;opacity:.7">💡 Si Pañol te entregó herramientas y no aparecen acá, puede ser que los movimientos antiguos no tengan tu ID de técnico asignado. Comunicá esto a tu supervisor.</div>`;
+          h+=`<div class="xs mu" style="padding:8px">No tenés herramientas asignadas en este momento.</div>`;
         }
+        h+=`<div class="mt8"><button class="btn btn-gh btn-xs" onclick="debugVerHerramientas('${u.user_id}','${u.nombre||""}')">🔍 Ver diagnóstico</button></div>`;
       }
       h+=`</div>`;
 
@@ -2964,6 +2964,67 @@ async function loadMT(){
 
   }catch(e){
     el("d-mt").innerHTML=`<div class="al al-d">${e.message}<br><button class="btn btn-p btn-sm mt8" onclick="loadMT()">Reintentar</button></div>`;
+  }
+}
+
+async function debugVerHerramientas(tecId, tecNombre){
+  showModal(ldr());
+  try{
+    const d=await api("debugHerramientas",{tecnico_id:tecId,tecnico_nombre:tecNombre});
+    const movs=d.movimientos_retiro||[];
+    const herrs=d.inventario_herramientas||[];
+    const res=d.resumen||{};
+
+    let h='<button class="mo-x" onclick="closeModal()">✕</button>'
+      +'<div class="mo-t">🔍 Diagnóstico herramientas</div>'
+      +'<div class="al al-i mb12">Técnico: <b>'+tecNombre+'</b> ('+tecId+')</div>'
+
+      +'<div class="card mb12" style="padding:10px">'
+        +'<div class="sm bold mb8">📊 Resumen</div>'
+        +'<div class="xs">Total movimientos Retiro: <b>'+res.total_retiros+'</b></div>'
+        +'<div class="xs">Con tecnico_id: <b style="color:var(--ag)">'+res.retiros_con_tecnico_id+'</b></div>'
+        +'<div class="xs">Sin tecnico_id: <b style="color:var(--ar)">'+res.retiros_sin_tecnico_id+'</b></div>'
+        +'<div class="xs">Herramientas en inventario: <b>'+res.total_herramientas_inv+'</b></div>'
+      +'</div>';
+
+    if(herrs.length){
+      h+='<div class="card mb12" style="padding:10px">'
+        +'<div class="sm bold mb8">🔧 Herramientas en inventario</div>';
+      herrs.forEach(her=>{
+        h+='<div class="xs" style="border-bottom:1px solid var(--border);padding:4px 0">'
+          +'['+her.item_id+'] '+her.descripcion+' · Disp: '+her.stock_disponible+' · En obra: '+her.stock_en_obra
+        +'</div>';
+      });
+      h+='</div>';
+    }
+
+    if(movs.length){
+      h+='<div class="card mb12" style="padding:10px">'
+        +'<div class="sm bold mb8">📋 Movimientos Retiro (últimos '+Math.min(movs.length,10)+')</div>';
+      movs.slice(-10).forEach(m=>{
+        const tieneId=!!m.tecnico_id;
+        h+='<div style="border-bottom:1px solid var(--border);padding:6px 0">'
+          +'<div class="xs">['+m.mov_id+'] '+m.item_id+' · '+m.cantidad+' ud.</div>'
+          +'<div class="xs '+(tieneId?"":"" )+'" style="color:'+(tieneId?"var(--ag)":"var(--ar)")+'">'
+            +'tecnico_id: '+(m.tecnico_id||"⚠ VACÍO")
+            +' · nombre: '+(m.tecnico_nombre||"—")
+          +'</div>'
+          +'<div class="xs mu">'+m.obra_id+' · '+m.fecha+'</div>'
+        +'</div>';
+      });
+      h+='</div>';
+    } else {
+      h+='<div class="al al-w">No hay movimientos de Retiro en la base. Las herramientas nunca fueron entregadas o el sheet está vacío.</div>';
+    }
+
+    h+='<div class="flex gap8 wrap mt8">'
+      +'<button class="btn btn-p btn-sm" onclick="closeModal();repararTecIdMovs()">🛠 Reparar tecnico_id viejos</button>'
+      +'<button class="btn btn-gh btn-sm" onclick="closeModal()">Cerrar</button>'
+    +'</div>';
+
+    showModal(h);
+  }catch(e){
+    showModal('<button class="mo-x" onclick="closeModal()">✕</button><div class="al al-d">'+e.message+'<br><br>Probablemente el Apps Script no fue redeployado. Ir a Apps Script → Deploy → Manage deployments → New version.</div>');
   }
 }
 
