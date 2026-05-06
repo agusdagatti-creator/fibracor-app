@@ -4029,10 +4029,20 @@ async function ejecutarObraAccion(accion){
     for(const solId of Object.keys(bySolStock)){
       const lst=bySolStock[solId];
       const localIdxs=lst.map(x=>x.localIdx);
+      // Build items_override with resolved itemIds (from autoLink)
+      const itemsOverride=lst.map(x=>({
+        localIdx:x.localIdx,
+        itemId:x.it.itemId||"",
+        desc:x.it.desc,
+        cant:x.it.cant,
+        uni:x.it.uni||"ud.",
+        obs:x.it.obs||""
+      }));
       const res=await api("procesarSolicitudParcial",{
         reporte_id:solId,
         items_idx_stock:JSON.stringify(localIdxs),
         items_idx_oc:JSON.stringify([]),
+        items_override:JSON.stringify(itemsOverride),
         proveedor:"",
         nota:nota
       });
@@ -4040,6 +4050,22 @@ async function ejecutarObraAccion(accion){
       if(res.entregaId){
         if(!resultados.entregas)resultados.entregas=[];
         resultados.entregas.push(res.entregaId);
+      }
+      // Collect warnings from response
+      if(!resultados.warnings)resultados.warnings=[];
+      if(res.itemsSinId&&res.itemsSinId.length){
+        resultados.warnings.push("📦 Materiales sin código (no se descontó stock): "+res.itemsSinId.join(", "));
+      }
+      if(res.erroresEgreso&&res.erroresEgreso.length){
+        resultados.warnings.push("⚠ Errores en egreso: "+res.erroresEgreso.join(", "));
+      }
+      if(res.entregaResumen){
+        if(res.entregaResumen.sinId&&res.entregaResumen.sinId.length){
+          resultados.warnings.push("🔧 Herramientas sin código (NO ASIGNADAS al técnico): "+res.entregaResumen.sinId.join(", ")+". Vinculá los ítems con stock antes de procesar.");
+        }
+        if(res.entregaResumen.errores&&res.entregaResumen.errores.length){
+          resultados.warnings.push("🔧 Errores entrega: "+res.entregaResumen.errores.join(", "));
+        }
       }
       resultados.itemsEnt+=res.itemsEntregados||0;
     }
@@ -4070,10 +4096,24 @@ async function ejecutarObraAccion(accion){
             bySolOC[it._solId].push(it._localIdx);
           });
           for(const solId of Object.keys(bySolOC)){
+            // Build items_override for OC items (same auto-link concept)
+            const ocLocalIdxs=bySolOC[solId];
+            const ocItemsOverride=ocLocalIdxs.map(li=>{
+              const itm=ocItemsFull.find(it=>it._localIdx===li&&it._solId===solId);
+              return itm ? {
+                localIdx:li,
+                itemId:itm.itemId||"",
+                desc:itm.desc,
+                cant:itm.cant,
+                uni:itm.uni||"ud.",
+                obs:itm.obs||""
+              } : null;
+            }).filter(x=>x);
             const res=await api("procesarSolicitudParcial",{
               reporte_id:solId,
               items_idx_stock:JSON.stringify([]),
-              items_idx_oc:JSON.stringify(bySolOC[solId]),
+              items_idx_oc:JSON.stringify(ocLocalIdxs),
+              items_override:JSON.stringify(ocItemsOverride),
               proveedor:prov==="(sin proveedor)"?"":prov,
               nota:nota
             });
@@ -4094,10 +4134,16 @@ async function ejecutarObraAccion(accion){
           bySolOC[it._solId].push(it._localIdx);
         });
         for(const solId of Object.keys(bySolOC)){
+          const ocLocalIdxs=bySolOC[solId];
+          const ocItemsOverride=ocLocalIdxs.map(li=>{
+            const itm=ocItemsFull.find(it=>it._localIdx===li&&it._solId===solId);
+            return itm ? {localIdx:li,itemId:itm.itemId||"",desc:itm.desc,cant:itm.cant,uni:itm.uni||"ud.",obs:itm.obs||""} : null;
+          }).filter(x=>x);
           const res=await api("procesarSolicitudParcial",{
             reporte_id:solId,
             items_idx_stock:JSON.stringify([]),
-            items_idx_oc:JSON.stringify(bySolOC[solId]),
+            items_idx_oc:JSON.stringify(ocLocalIdxs),
+            items_override:JSON.stringify(ocItemsOverride),
             proveedor:provDefault||"VARIOS",
             nota:nota+(nota?" — ":"")+"Proveedores sugeridos: "+obsConProv
           });
