@@ -956,7 +956,21 @@ async function repararTecIdMovs(){
   try{
     const res=await api("repararTecnicoIdMovimientos");
     toast("✓ Revisados: "+res.checked+" · Corregidos: "+res.fixed);
+    setTimeout(()=>loadMT(),1000);
   }catch(e){toast("Error: "+e.message);}
+}
+
+async function repararTecIdMovsSilent(btn){
+  if(btn){btn.disabled=true;btn.textContent="Reparando...";}
+  try{
+    const res=await api("repararTecnicoIdMovimientos");
+    toast("✓ Revisados: "+res.checked+" · Corregidos: "+res.fixed);
+    closeModal();
+    setTimeout(()=>loadMT(),800);
+  }catch(e){
+    if(btn){btn.disabled=false;btn.textContent="🛠 Reparar y recargar";}
+    toast("Error: "+e.message);
+  }
 }
 
 async function modalEditarItem(it){
@@ -3018,7 +3032,7 @@ async function debugVerHerramientas(tecId, tecNombre){
     }
 
     h+='<div class="flex gap8 wrap mt8">'
-      +'<button class="btn btn-p btn-sm" onclick="closeModal();repararTecIdMovs()">🛠 Reparar tecnico_id viejos</button>'
+      +'<button class="btn btn-p btn-sm" onclick="repararTecIdMovsSilent(this)">🛠 Reparar y recargar</button>'
       +'<button class="btn btn-gh btn-sm" onclick="closeModal()">Cerrar</button>'
     +'</div>';
 
