@@ -1311,27 +1311,47 @@ function renderComprasItems(lista){
     else if(accion==="eliminar-oc")eliminarOC(c.compra_id);
   };
 }
-function modalEditarOC(c){
-  const invOpts=S.inv.map(i=>`<option value="${i.item_id}">${i.descripcion} (${i.item_id})</option>`).join("");
+async function modalEditarOC(c){
+  await ensureProveedores();
+  const invOpts=(S.inv||[]).map(i=>`<option value="${i.item_id}">${i.descripcion} (${i.item_id})</option>`).join("");
+  const aprobOpts=(S._aprobadores||[]).map(u=>`<option value="${u.user_id}">${u.nombre} (${u.area})</option>`).join("");
+
   showModal(`<button class="mo-x" onclick="closeModal()">✕</button>
-    <div class="mo-t">Editar OC — ${c.compra_id}</div>
-    <div class="al al-w">Solo se puede editar si todavía no fue aprobada.</div>
-    <div class="fg"><label>DESCRIPCIÓN</label><input class="inp" id="eoc-de" value="${c.descripcion||c.item_id||""}"></div>
-    <div class="fg"><label>ÍTEM (cambiar si es necesario)</label>
+    <div class="mo-t">✏ Editar OC — ${c.compra_id}</div>
+    ${c.estado!=="Solicitado"?`<div class="al al-w mb12">⚠ Esta OC está en estado <b>${c.estado}</b>. Solo se recomienda editar OCs en estado "Solicitado".</div>`:""}
+    <div class="fg"><label>DESCRIPCIÓN</label>
+      <input class="inp" id="eoc-de" value="${(c.descripcion||c.item_id||"").replace(/"/g,"&quot;")}">
+    </div>
+    <div class="fg"><label>ÍTEM DEL INVENTARIO (opcional)</label>
       <select class="sel" id="eoc-it" onchange="autoFillEditOC()">
         <option value="${c.item_id||""}">${c.descripcion||c.item_id||"— sin cambiar —"}</option>
         ${invOpts}
       </select>
     </div>
     <div class="g2f">
-      <div class="fg"><label>CANTIDAD</label><input class="inp" type="number" id="eoc-ca" value="${c.cantidad_faltante||1}" min="0.01"></div>
-      <div class="fg"><label>UNIDAD</label><input class="inp" id="eoc-un" value="${c.unidad||"ud."}"></div>
+      <div class="fg"><label>CANTIDAD *</label>
+        <input class="inp" type="number" id="eoc-ca" value="${c.cantidad_faltante||1}" min="0.01" step="0.01">
+      </div>
+      <div class="fg"><label>UNIDAD</label>
+        <input class="inp" id="eoc-un" value="${c.unidad||"ud."}">
+      </div>
     </div>
-    <div class="fg"><label>PROVEEDOR</label><input class="inp" id="eoc-pv" value="${c.proveedor||""}"></div>
+    <div class="fg"><label>🏭 PROVEEDOR *</label>
+      ${provDropdown("eoc-pv", c.proveedor||"", {placeholder:"Buscar o escribir proveedor..."})}
+    </div>
     <div class="fg"><label>PRIORIDAD</label>
       <select class="sel" id="eoc-pr">
         ${["Normal","Media","Alta","Urgente"].map(p=>`<option${p===c.prioridad?" selected":""}>${p}</option>`).join("")}
       </select>
+    </div>
+    <div class="fg"><label>🔔 REDIRIGIR APROBACIÓN A</label>
+      <select class="sel" id="eoc-aprob">
+        <option value="${c.aprobador_id||""}">${c.aprobador_nombre||c.aprobador_id||"— mantener actual —"}</option>
+        ${aprobOpts}
+      </select>
+    </div>
+    <div class="fg"><label>OBSERVACIÓN</label>
+      <input class="inp" id="eoc-obs" value="${(c.observaciones||"").replace(/"/g,"&quot;")}">
     </div>
     <button class="btn btn-p btn-bl" onclick="saveEditarOC('${c.compra_id}')">Guardar cambios</button>`);
 }
@@ -1341,8 +1361,29 @@ function autoFillEditOC(){
   if(it){el("eoc-de").value=it.descripcion;el("eoc-un").value=it.unidad||"ud.";}
 }
 async function saveEditarOC(id){
-  const body={compra_id:id,descripcion:g("eoc-de"),item_id:g("eoc-it"),cantidad_faltante:g("eoc-ca"),unidad:g("eoc-un"),proveedor:g("eoc-pv"),prioridad:g("eoc-pr")};
-  try{await api("editarCompra",body);closeModal();toast("✓ OC actualizada");loadCompras();}catch(e){toast("Error: "+e.message);}
+  const body={
+    compra_id:id,
+    descripcion:g("eoc-de"),
+    item_id:g("eoc-it")||"",
+    cantidad_faltante:g("eoc-ca"),
+    unidad:g("eoc-un"),
+    proveedor:g("eoc-pv")||"",
+    prioridad:g("eoc-pr"),
+    aprobador_id:g("eoc-aprob")||"",
+    observaciones:g("eoc-obs")||""
+  };
+  if(!body.proveedor){toast("Seleccioná o ingresá un proveedor");return;}
+  const btn=document.querySelector("#mc .btn-p.btn-bl");
+  if(btn){btn.disabled=true;btn.textContent="Guardando...";}
+  try{
+    await api("editarCompra",body);
+    closeModal();
+    toast("✓ OC actualizada — Proveedor: "+body.proveedor);
+    loadCompras();
+  }catch(e){
+    if(btn){btn.disabled=false;btn.textContent="Guardar cambios";}
+    toast("Error: "+e.message);
+  }
 }
 async function eliminarOC(id){
   if(!confirm(`¿Eliminar OC ${id}? Esta acción no se puede deshacer.`))return;
