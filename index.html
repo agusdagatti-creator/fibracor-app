@@ -180,6 +180,7 @@ tr:last-child td{border-bottom:none;}tr:hover td{background:rgba(255,255,255,.02
             <button class="btn btn-p btn-sm" id="btn-ci" onclick="modalCrearItem()">+ &#205;tem</button>
             <button class="btn btn-g btn-sm" id="btn-ing" onclick="modalIngreso()">+ Ingreso</button>
             <button class="btn btn-o btn-sm" onclick="modalMov()">&#8722; Egreso</button>
+            <button class="btn btn-gh btn-sm" onclick="modalAsignarHerramienta()" title="Asignar herramienta a técnico">🔧 Asignar a técnico</button>
           </div>
         </div>
         <div id="d-inv"><div class="loader"><div class="spin"></div></div></div>
@@ -880,6 +881,81 @@ function renderInvItems(lista){
     else if(accion==="precios")modalPrecios(it.item_id,it.precio_costo||0,it.precio_lista||0);
     else if(accion==="oc")modalCompraDesdeItem(it);
   };
+}
+
+async function modalAsignarHerramienta(){
+  showModal(ldr());
+  if(!S.inv||!S.inv.length){try{const dI=await api("getInventario");S.inv=dI.items||[];}catch(e){}}
+  if(!S.obras||!S.obras.length){try{const dO=await api("getObras");S.obras=dO.obras||[];}catch(e){}}
+
+  // Get técnicos
+  let tecnicos=[];
+  try{
+    const dU=await api("getUsuarios");
+    tecnicos=(dU.usuarios||[]).filter(u=>{
+      const a=String(u.area||"").toLowerCase();
+      return (a.includes("tec")||a==="tecnico"||a==="técnico")&&u.activo!==false;
+    });
+  }catch(e){tecnicos=[];}
+
+  const herrItems=(S.inv||[]).filter(i=>{
+    const c=String(i.categoria||"").toLowerCase();
+    return c==="herramienta"||c==="reutilizable";
+  });
+  const herrOpts=herrItems.map(i=>'<option value="'+i.item_id+'">'+i.descripcion+' ['+i.item_id+'] · Stock: '+(i.stock_disponible||0)+'</option>').join("");
+  const tecOpts=tecnicos.map(u=>'<option value="'+u.user_id+'">'+u.nombre+' ('+u.user_id+')</option>').join("");
+  const obraOpts=(S.obras||[]).filter(o=>o.estado==="En ejecución"||o.estado==="Pendiente OIO").map(o=>'<option value="'+o.obra_id+'">'+o.obra_id+' — '+o.cliente+'</option>').join("");
+
+  showModal('<button class="mo-x" onclick="closeModal()">✕</button>'
+    +'<div class="mo-t">🔧 Asignar herramienta a técnico</div>'
+    +'<div class="al al-i mb12">Asignación manual rápida sin pasar por solicitud. Útil para regularizar entregas o asignar herramientas directamente.</div>'
+    +'<div class="fg"><label>HERRAMIENTA *</label>'
+      +'<select class="sel" id="ah-it"><option value="">— elegir —</option>'+herrOpts+'</select>'
+    +'</div>'
+    +'<div class="g2f">'
+      +'<div class="fg"><label>TÉCNICO *</label>'
+        +'<select class="sel" id="ah-tec"><option value="">— elegir —</option>'+tecOpts+'</select>'
+      +'</div>'
+      +'<div class="fg"><label>CANTIDAD *</label>'
+        +'<input class="inp" type="number" id="ah-cant" value="1" min="1">'
+      +'</div>'
+    +'</div>'
+    +'<div class="fg"><label>OBRA</label>'
+      +'<select class="sel" id="ah-obra"><option value="">— sin obra —</option>'+obraOpts+'</select>'
+    +'</div>'
+    +'<div class="fg"><label>OBSERVACIÓN</label>'
+      +'<input class="inp" id="ah-obs" placeholder="Motivo, contexto...">'
+    +'</div>'
+    +'<button class="btn btn-p btn-bl" onclick="confirmarAsignarHerramienta()">🔧 Asignar al técnico</button>'
+    +'<div class="xs mu mt12" style="text-align:center">— —</div>'
+    +'<div class="ct mt8" style="font-size:11px">Mantenimiento</div>'
+    +'<button class="btn btn-gh btn-sm" onclick="repararTecIdMovs()">🛠 Reparar movimientos viejos sin tecnico_id</button>'
+    +'<div class="xs mu mt4">Recorre movimientos antiguos y completa el tecnico_id basándose en las solicitudes originales.</div>');
+}
+
+async function confirmarAsignarHerramienta(){
+  const itemId=g("ah-it"),tecId=g("ah-tec"),cant=parseFloat(g("ah-cant"))||0;
+  if(!itemId||!tecId||cant<=0){toast("Completá todos los campos requeridos");return;}
+  try{
+    await api("asignarHerramientaManual",{
+      item_id:itemId,
+      tecnico_id:tecId,
+      cantidad:cant,
+      obra_id:g("ah-obra")||"",
+      observaciones:g("ah-obs")||""
+    });
+    closeModal();
+    toast("✓ Herramienta asignada al técnico");
+    if(typeof loadInv==="function")loadInv();
+  }catch(e){toast("Error: "+e.message);}
+}
+
+async function repararTecIdMovs(){
+  if(!confirm("Esta acción recorre todos los movimientos de Retiro/Devolución y completa el tecnico_id basándose en las solicitudes originales. ¿Continuar?"))return;
+  try{
+    const res=await api("repararTecnicoIdMovimientos");
+    toast("✓ Revisados: "+res.checked+" · Corregidos: "+res.fixed);
+  }catch(e){toast("Error: "+e.message);}
 }
 
 async function modalEditarItem(it){
@@ -2701,11 +2777,14 @@ async function loadMT(){
         h+=`</div>`;
       }else{h+=`<div class="al al-i mb12">No tenés obras activas asignadas.</div>`;}
 
-      // Herramientas asignadas al técnico
+      // Herramientas asignadas al técnico (siempre mostrar el panel)
+      h+=`<div class="card mb12" style="border-color:rgba(167,139,250,.3)">
+        <div class="ct" style="display:flex;justify-content:space-between;align-items:center">
+          <span>🔧 Herramientas en mi poder (${herrasig.length})</span>
+          <button class="btn btn-gh btn-xs" onclick="loadMT()">🔄 Actualizar</button>
+        </div>`;
       if(herrasig.length){
-        h+=`<div class="card mb12" style="border-color:rgba(167,139,250,.3)">
-          <div class="ct">🔧 Herramientas en mi poder (${herrasig.length})</div>
-          <div class="xs mu mb12">Herramientas que tenés asignadas. Cuando las devuelvas, enviá la solicitud de devolución.</div>`;
+        h+=`<div class="xs mu mb12">Herramientas que tenés asignadas. Cuando las devuelvas, enviá la solicitud de devolución.</div>`;
         herrasig.forEach((her,i)=>{
           h+=`<div style="border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:8px">
             <div class="flex between mb6">
@@ -2719,9 +2798,12 @@ async function loadMT(){
             </button>
           </div>`;
         });
-        h+=`</div>`;
         window._mtHerramientas=herrasig;
+      } else {
+        h+=`<div class="xs mu" style="padding:8px">No tenés herramientas asignadas en este momento.</div>
+        <div class="xs mu" style="padding:8px;opacity:.7">💡 Si Pañol te entregó herramientas y no aparecen acá, puede ser que los movimientos antiguos no tengan tu ID de técnico asignado. Comunicá esto a tu supervisor.</div>`;
       }
+      h+=`</div>`;
 
       // Obras terminadas
       if(obrasTerminadas.length){
